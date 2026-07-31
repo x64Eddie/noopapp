@@ -101,13 +101,36 @@ object WhoopSync {
 
     // ── The sync itself ─────────────────────────────────────────────────────
 
-    /** Result of one [runOnce] call, surfaced to the settings screen's "last sync" status line. */
+    /** Result of one [runOnce] call, surfaced to the settings screen's "last sync" status line.
+     *  [authRejected] distinguishes a key/user_id mismatch (config problem, won't resolve by
+     *  waiting) from every other failure (network blip, server hiccup — worth retrying). */
     data class SyncResult(
         val success: Boolean,
         val hrSent: Int,
         val rrSent: Int,
         val message: String,
+        val authRejected: Boolean = false,
     )
+
+    /** Classifies one POST attempt: [Success] (2xx), [AuthRejected] (401/403 — the backend
+     *  API key doesn't match, or isn't scoped to, the configured user_id), or [Failed] (anything
+     *  else: other HTTP status, timeout, connection error). Kept separate from a bare Boolean so
+     *  callers can tell "this will never succeed without a config fix" apart from "try again
+     *  later" — see the worker's Result.failure() vs Result.retry() choice below. */
+    internal sealed class PostOutcome {
+        data object Success : PostOutcome()
+        data object AuthRejected : PostOutcome()
+        data object Failed : PostOutcome()
+    }
+
+    /** Pure decision, split out of [post] so it's unit-testable without a real network call —
+     *  401/403 are exactly what the backend's enforce_sdk_user_scope returns for a key/user_id
+     *  mismatch (verified live against the running backend when that check was added). */
+    internal fun classifyResponse(httpCode: Int, successful: Boolean): PostOutcome = when {
+        successful -> PostOutcome.Success
+        httpCode == 401 || httpCode == 403 -> PostOutcome.AuthRejected
+        else -> PostOutcome.Failed
+    }
 
     /** Drain up to [MAX_BATCHES_PER_RUN] batches of unsynced HR + R-R rows. Returns success only
      *  if every batch it attempted was accepted (a mid-run failure stops the drain but keeps the
@@ -136,12 +159,21 @@ object WhoopSync {
             }
 
             val payload = buildPayload(deviceId, hrRows, rrRows)
-            val ok = post(context, payload)
-            if (!ok) {
-                return@withContext SyncResult(
-                    totalHr > 0 || totalRr > 0, totalHr, totalRr,
-                    "Sync failed on batch $batch (${hrRows.size} HR, ${rrRows.size} RR pending retry).",
+            when (post(context, payload)) {
+                PostOutcome.AuthRejected -> return@withContext SyncResult(
+                    success = false,
+                    hrSent = totalHr,
+                    rrSent = totalRr,
+                    message = "Sync key doesn't match this account — check Settings.",
+                    authRejected = true,
                 )
+                PostOutcome.Failed -> return@withContext SyncResult(
+                    success = totalHr > 0 || totalRr > 0,
+                    hrSent = totalHr,
+                    rrSent = totalRr,
+                    message = "Sync failed on batch $batch (${hrRows.size} HR, ${rrRows.size} RR pending retry).",
+                )
+                PostOutcome.Success -> { /* fall through, advance cursor below */ }
             }
 
             hrRows.maxOfOrNull { it.ts }?.let { SyncPrefs.setHrCursor(context, it) }
@@ -209,7 +241,7 @@ object WhoopSync {
         }.toString()
     }
 
-    private fun post(context: Context, jsonBody: String): Boolean {
+    private fun post(context: Context, jsonBody: String): PostOutcome {
         val baseUrl = SyncKeyStore.readBaseUrl(context)
         val userId = SyncKeyStore.readUserId(context)
         val apiKey = SyncKeyStore.readApiKey(context)
@@ -221,8 +253,10 @@ object WhoopSync {
             .build()
 
         return runCatching {
-            http.newCall(request).execute().use { it.isSuccessful }
-        }.getOrDefault(false)
+            http.newCall(request).execute().use { response ->
+                classifyResponse(response.code, response.isSuccessful)
+            }
+        }.getOrDefault(PostOutcome.Failed)
     }
 }
 
@@ -231,7 +265,14 @@ class WhoopSyncWorker(appContext: Context, params: WorkerParameters) :
     CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val result = WhoopSync.runOnce(applicationContext)
-        return if (result.success) Result.success() else Result.retry()
+        return when {
+            result.success -> Result.success()
+            // Don't burn the exponential-backoff budget retrying a config error that won't
+            // fix itself by waiting - the next NORMAL periodic run will try again regardless,
+            // once (if) the key/user_id mismatch gets corrected in Settings.
+            result.authRejected -> Result.failure()
+            else -> Result.retry()
+        }
     }
 }
 
