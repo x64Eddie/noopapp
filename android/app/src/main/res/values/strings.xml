@@ -33,6 +33,7 @@
     <string name="nav_devices">Devices</string>
     <string name="nav_data_sources">Data Sources</string>
     <string name="nav_backup_sync">Backup &amp; Sync</string>
+    <string name="nav_whoop_sync">Sync to open-wearables</string>
     <string name="nav_fused_record">Your Data, Fused</string>
     <string name="nav_notifications">Notifications</string>
     <string name="nav_support">Support</string>
