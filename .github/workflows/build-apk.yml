@@ -1,0 +1,53 @@
+## Builds and publishes a release APK. Separate from android.yml (which is CI verification
+## only, on every push/PR) - this only runs when you actually cut a release, i.e. push a
+## `vX.Y.Z` tag, or trigger it by hand. Obtainium (or any GitHub-Releases watcher) polls this
+## repo's Releases page for the attached APK.
+name: Build APK
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build full release APK
+        # No keystore.properties in CI -> release falls back to the debug signing key,
+        # exactly as documented in build.gradle.kts, so this always produces an installable APK.
+        run: ./gradlew assembleFullRelease --console=plain
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: noop-full-release
+          path: android/app/build/outputs/apk/full/release/*.apk
+
+      - name: Attach APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/full/release/*.apk
+          generate_release_notes: true
