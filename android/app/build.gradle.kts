@@ -14,6 +14,13 @@ val keystoreProps = Properties().apply {
     if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
 }
 val isStagingRelease = project.hasProperty("stagingRelease")
+// Personal sideload build (-PpersonalRelease): release code (not debuggable, so no JIT/debug overhead)
+// installed under the `.debug` id and signed with `fork-debug.keystore`, so it upgrades the existing
+// sideloaded install in place. The keystore is git-ignored; CI decodes it from a repository secret.
+// -PpersonalBuild=N (the CI run number) stamps versionName "<base>.N" and versionCode 600000 + N, so
+// every build upgrades the last one and the in-app update check (UpdateCheck.isNewer) sees it as newer.
+val isPersonalRelease = project.hasProperty("personalRelease")
+val personalBuild = (project.findProperty("personalBuild") as String?)?.toInt()
 val requestedReleaseBuild = gradle.startParameter.taskNames.any {
     it.contains("Release", ignoreCase = true)
 }
@@ -26,8 +33,8 @@ android {
         applicationId = "com.noop.whoop"
         minSdk = 26
         targetSdk = 34
-        versionCode = 534
-        versionName = "11.8.0"
+        versionCode = personalBuild?.let { 600_000 + it } ?: 534
+        versionName = "11.8.0" + (personalBuild?.let { ".$it" } ?: "")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -73,7 +80,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            if (!keystorePropsFile.exists() && !isStagingRelease && requestedReleaseBuild) {
+            if (!keystorePropsFile.exists() && !isStagingRelease && !isPersonalRelease && requestedReleaseBuild) {
                 throw GradleException(
                     "Refusing to build a real release without keystore.properties. " +
                         "Use -PstagingRelease for debug-key staging artifacts only."
@@ -81,7 +88,7 @@ android {
             }
             // Real release key when keystore.properties is present. The debug-key fallback is allowed
             // only for explicit fork/staging artifacts that install under their own application id.
-            signingConfig = if (keystorePropsFile.exists()) {
+            signingConfig = if (keystorePropsFile.exists() && !isPersonalRelease) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
@@ -92,6 +99,13 @@ android {
             if (isStagingRelease) {
                 applicationIdSuffix = ".staging"
                 versionNameSuffix = "-staging"
+            }
+            if (isPersonalRelease) {
+                if (!rootProject.file("fork-debug.keystore").exists()) {
+                    throw GradleException("-PpersonalRelease needs android/fork-debug.keystore (the key the phone's install is signed with).")
+                }
+                applicationIdSuffix = ".debug"
+                versionNameSuffix = "-personal"
             }
         }
     }

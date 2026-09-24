@@ -1,0 +1,75 @@
+name: Personal release
+
+# Builds the personal sideload APK and publishes it as the latest GitHub Release, which is what the
+# phone watches (Obtainium, and the app's own daily UpdateCheck). Every push to main that touches the
+# Android app ships a new build; run it by hand from the Actions tab to rebuild without a change.
+#
+# The APK is release code installed under the `.debug` id and signed with the same key as the phone's
+# existing install, so it upgrades in place with all data kept. That key never lives in git: it comes
+# from the FORK_DEBUG_KEYSTORE_B64 secret (base64 of android/fork-debug.keystore).
+#   gh secret set FORK_DEBUG_KEYSTORE_B64 -R x64Eddie/noopapp < <(base64 -i android/fork-debug.keystore)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/personal-release.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: personal-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.FORK_DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::FORK_DEBUG_KEYSTORE_B64 is not set; an APK signed with any other key cannot upgrade the phone's install."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > fork-debug.keystore
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleFullRelease -PpersonalRelease -PpersonalBuild=${{ github.run_number }} --console=plain
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=app/build/outputs/apk/full/release/app-full-release.apk
+          name=$(grep -o '"versionName": *"[^"]*"' app/build/outputs/apk/full/release/output-metadata.json | sed 's/.*"\([^"]*\)"$/\1/')
+          version=${name%-personal}
+          cp "$apk" "noop-personal-$version.apk"
+          git log -10 --pretty='- %s' > notes.md
+          gh release create "v$version" "noop-personal-$version.apk" \
+            --target "$GITHUB_SHA" --title "NOOP personal $version" --notes-file notes.md --latest
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f fork-debug.keystore

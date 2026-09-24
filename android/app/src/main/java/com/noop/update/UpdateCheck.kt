@@ -24,7 +24,9 @@ import java.net.URL
  */
 object UpdateCheck {
 
-    private const val ENDPOINT = "https://api.github.com/repos/ryanbr/noop/releases/latest"
+    // This fork's own releases (built by .github/workflows/personal-release.yml), not upstream's: an
+    // upstream release is signed with a different key and could not be installed over this build anyway.
+    private const val ENDPOINT = "https://api.github.com/repos/x64Eddie/noopapp/releases/latest"
 
     sealed interface Result {
         data class UpToDate(val version: String) : Result

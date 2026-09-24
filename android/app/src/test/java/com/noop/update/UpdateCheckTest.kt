@@ -28,4 +28,12 @@ class UpdateCheckTest {
         assertFalse(UpdateCheck.isNewer("1.39-demo", "1.39")) // demo flavour vs the same release
         assertFalse(UpdateCheck.isNewer("garbage", "1.39"))   // unparseable → not newer (no false alarm)
     }
+
+    @Test
+    fun personalBuildNumbers_compareAsAFourthSegment() {
+        // personal-release.yml tags v<base>.<run>; the installed versionName carries "-personal".
+        assertTrue(UpdateCheck.isNewer("11.8.0.42", "11.8.0.41-personal"))
+        assertFalse(UpdateCheck.isNewer("11.8.0.41", "11.8.0.41-personal"))
+        assertTrue(UpdateCheck.isNewer("11.9.0.43", "11.8.0.42-personal"))  // rebased; run number keeps climbing
+    }
 }
