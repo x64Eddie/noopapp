@@ -58,6 +58,18 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleFullRelease -PpersonalRelease -PpersonalBuild=${{ github.run_number }} --console=plain
 
+      - name: Check signing key
+        # Only an APK signed with the phone install's key can upgrade it; refuse to publish anything else.
+        run: |
+          expected=0391a6b4a87ab93ed874028b968d17ca353a55f73f02206eb1abe52bef9b19b3
+          signer=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          actual=$("$signer" verify --print-certs app/build/outputs/apk/full/release/app-full-release.apk \
+            | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::APK signed with $actual, expected $expected (FORK_DEBUG_KEYSTORE_B64 holds the wrong key)."
+            exit 1
+          fi
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
