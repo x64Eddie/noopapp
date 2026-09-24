@@ -1229,6 +1229,17 @@ object NoopPrefs {
         of(context).edit().putBoolean(KEY_AUTO_END_WORKOUTS, enabled).apply()
     }
 
+    /** Draw a finished workout's GPS route over OpenStreetMap tiles in its detail sheet. Default OFF: each
+     *  tile request tells tile.openstreetmap.org the area of the route. Off, the route draws offline. */
+    const val KEY_ROUTE_MAP_TILES = "noop.routeMapTiles"
+
+    fun routeMapTiles(context: Context): Boolean =
+        of(context).getBoolean(KEY_ROUTE_MAP_TILES, false)
+
+    fun setRouteMapTiles(context: Context, enabled: Boolean) {
+        of(context).edit().putBoolean(KEY_ROUTE_MAP_TILES, enabled).apply()
+    }
+
     fun journalReminderEnabled(context: Context): Boolean =
         of(context).getBoolean(KEY_JOURNAL_REMINDER_ENABLED, true)
 

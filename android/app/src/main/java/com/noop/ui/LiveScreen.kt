@@ -164,6 +164,7 @@ fun LiveScreen(viewModel: AppViewModel, onManageDevices: () -> Unit = {}) {
     // the live readout); see the report note.
     var showSportPicker by remember { mutableStateOf(false) }
     var showHrvSnapshot by remember { mutableStateOf(false) }
+    var showLastWorkout by remember { mutableStateOf(false) }
     // Live workout mode (#238): the full-screen in-exercise overlay. Normally opened at workout START
     // (StartWorkoutSheet); this lets the Today "workout in progress" indicator re-open it for a session
     // already in flight by consuming the ViewModel's one-shot on appear (iOS parity:
@@ -508,11 +509,19 @@ fun LiveScreen(viewModel: AppViewModel, onManageDevices: () -> Unit = {}) {
                     row.avgHr?.let { "$it avg bpm" },
                     row.strain?.let { "strain ${UnitFormatter.effortDisplay(it, effortScale)}" },
                 )
-                Text(
-                    uiString(R.string.live_workout_saved_summary, row.sport, parts.joinToString(" · ")),
-                    style = NoopType.footnote, color = Palette.textSecondary,
-                )
-                row.routePolyline?.let { RouteCanvas(it, modifier = Modifier.padding(top = 8.dp)) }
+                // The saved session opens its full detail sheet (calories, Effort, zones, route) straight
+                // from here, rather than only from Today or the Workouts list.
+                Column(modifier = Modifier.fillMaxWidth().clickable { showLastWorkout = true }) {
+                    Text(
+                        uiString(R.string.live_workout_saved_summary, row.sport, parts.joinToString(" · ")),
+                        style = NoopType.footnote, color = Palette.textSecondary,
+                    )
+                    Text("View details", style = NoopType.footnote, color = Palette.accent)
+                    row.routePolyline?.let { RouteCanvas(it, modifier = Modifier.padding(top = 8.dp)) }
+                }
+                if (showLastWorkout) {
+                    WorkoutDetailSheet(vm = viewModel, row = row, onDismiss = { showLastWorkout = false })
+                }
             }
 
             // Manual HRV snapshot (#127) — a still, seated 60s R-R reading. Needs the live R-R stream,
