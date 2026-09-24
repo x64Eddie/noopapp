@@ -59,7 +59,9 @@ object WhoopSync {
 
     private val http: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
+            // The backend sits on a tailnet: it answers within a second or it is unreachable (Tailscale
+            // off), so a long connect timeout only keeps the radio awake for nothing.
+            .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .build()
@@ -77,12 +79,13 @@ object WhoopSync {
         }
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
             .build()
         val req = PeriodicWorkRequestBuilder<WhoopSyncWorker>(
             SyncPrefs.intervalMinutes(context).toLong(), TimeUnit.MINUTES,
         )
             .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 5, TimeUnit.MINUTES)
             .build()
         wm.enqueueUniquePeriodicWork(WORK_PERIODIC, ExistingPeriodicWorkPolicy.UPDATE, req)
     }
@@ -271,8 +274,16 @@ class WhoopSyncWorker(appContext: Context, params: WorkerParameters) :
             // fix itself by waiting - the next NORMAL periodic run will try again regardless,
             // once (if) the key/user_id mismatch gets corrected in Settings.
             result.authRejected -> Result.failure()
+            // A network failure usually means the backend is unreachable (Tailscale off), which waiting
+            // minutes will not fix. Retry a couple of times for a genuine blip, then give up until the
+            // next periodic run: the cursors did not move, so that run resumes with nothing lost.
+            runAttemptCount >= MAX_RETRIES -> Result.failure()
             else -> Result.retry()
         }
+    }
+
+    private companion object {
+        const val MAX_RETRIES = 2
     }
 }
 
