@@ -1550,6 +1550,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Last time the non-GPS snapshot was written; see [persistNonGpsWorkout]. */
     private var lastWorkoutPersistMs = 0L
 
+    /** Unix second of the last live Effort rescore; see [captureWorkoutSample]. */
+    private var lastLiveStrainTs = 0L
+
     /** Emit one Workouts & GPS test-mode line tagged .workouts iff the mode is on. The cheap
      *  TestCentre.active(WORKOUTS) gate is read here, so nothing is built when the mode is off. The line
      *  is built lazily by the caller (already a short String, no heavy work). Diagnostic only. */
@@ -1877,9 +1880,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val s = w.samples + HrSample(deviceId = deviceId, ts = ts, bpm = bpm)
-        val strain = StrainScorer.strain(
-            s, maxHR = profileStore.hrMax.toDouble(),
-            method = NoopPrefs.effortMethod(appContext), sex = profileStore.sex) ?: 0.0
+        // The live Effort is a full rescore over every sample; per second that made a long (or forgotten)
+        // session cost O(n) each tick, O(n²) overall. It only feeds the on-screen number (endWorkout
+        // rescores the saved session from the samples), so refresh it every 15 s.
+        val strain = if (ts - lastLiveStrainTs >= 15 || w.samples.isEmpty()) {
+            lastLiveStrainTs = ts
+            StrainScorer.strain(
+                s, maxHR = profileStore.hrMax.toDouble(),
+                method = NoopPrefs.effortMethod(appContext), sex = profileStore.sex) ?: 0.0
+        } else w.liveStrain
         val updated = w.copy(
             // Grown by comparison, not recomputed from `s`, so a peak folded in from a repeated second is kept.
             samples = s, avgHr = s.sumOf { it.bpm } / s.size, peakHr = maxOf(w.peakHr, bpm), liveStrain = strain,
