@@ -55,6 +55,9 @@ class NoopApplication : Application() {
         // this is a no-op once a schedule exists, and the worker retires itself when no widget is
         // placed — which is what stops this costing anything for an install that has never had one.
         com.noop.widget.StressWidgetRefresh.ensureScheduled(this)
+        // Re-enqueue the WHOOP sync with UPDATE so an install upgraded from a build with older retry /
+        // constraint settings picks the new ones up at once. Cancels it when sync is off or unconfigured.
+        runCatching { com.noop.sync.WhoopSync.reschedule(this) }
     }
 
     /** Process-wide Room-backed store. One instance shared by the UI and the background service. */
