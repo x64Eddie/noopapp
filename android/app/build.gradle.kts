@@ -21,6 +21,10 @@ val isStagingRelease = project.hasProperty("stagingRelease")
 // every build upgrades the last one and the in-app update check (UpdateCheck.isNewer) sees it as newer.
 val isPersonalRelease = project.hasProperty("personalRelease")
 val personalBuild = (project.findProperty("personalBuild") as String?)?.toInt()
+// "<owner>/<repo>" UpdateCheck polls for personal releases (docs/PERSONAL_UPDATES.md). A build-time
+// property, not a literal in source, so forking this pipeline to another GitHub repo/owner needs no
+// source edit: -PpersonalUpdateRepo=<owner>/<repo>.
+val personalUpdateRepo = (project.findProperty("personalUpdateRepo") as String?) ?: "x64Eddie/noopapp"
 val requestedReleaseBuild = gradle.startParameter.taskNames.any {
     it.contains("Release", ignoreCase = true)
 }
@@ -40,6 +44,7 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        buildConfigField("String", "PERSONAL_UPDATE_REPO", "\"$personalUpdateRepo\"")
     }
 
     signingConfigs {
