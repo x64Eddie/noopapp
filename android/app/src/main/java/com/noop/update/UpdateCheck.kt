@@ -1,5 +1,6 @@
 package com.noop.update
 
+import com.noop.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -26,7 +27,9 @@ object UpdateCheck {
 
     // This fork's own releases (built by .github/workflows/personal-release.yml), not upstream's: an
     // upstream release is signed with a different key and could not be installed over this build anyway.
-    private const val ENDPOINT = "https://api.github.com/repos/x64Eddie/noopapp/releases/latest"
+    // The repo is BuildConfig.PERSONAL_UPDATE_REPO (-PpersonalUpdateRepo, default "x64Eddie/noopapp"),
+    // not a literal here — see docs/PERSONAL_UPDATES.md.
+    private val ENDPOINT = "https://api.github.com/repos/${BuildConfig.PERSONAL_UPDATE_REPO}/releases/latest"
 
     sealed interface Result {
         data class UpToDate(val version: String) : Result

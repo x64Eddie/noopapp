@@ -6,8 +6,11 @@ name: Personal release
 #
 # The APK is release code installed under the `.debug` id and signed with the same key as the phone's
 # existing install, so it upgrades in place with all data kept. That key never lives in git: it comes
-# from the FORK_DEBUG_KEYSTORE_B64 secret (base64 of android/fork-debug.keystore).
+# from the FORK_DEBUG_KEYSTORE_B64 secret (base64 of android/fork-debug.keystore), and the cert it's
+# expected to produce lives in the SIGNING_SHA256 repo variable, also outside tracked source.
 #   gh secret set FORK_DEBUG_KEYSTORE_B64 -R x64Eddie/noopapp < <(base64 -i android/fork-debug.keystore)
+#   gh variable set SIGNING_SHA256 -R x64Eddie/noopapp --body <sha256 of the signing cert>
+# Switching to a different fork/keystore only needs those two set — nothing in this file to edit.
 
 on:
   push:
@@ -60,8 +63,16 @@ jobs:
 
       - name: Check signing key
         # Only an APK signed with the phone install's key can upgrade it; refuse to publish anything else.
+        # Fingerprint lives in the SIGNING_SHA256 repo variable, not in tracked source:
+        #   gh variable set SIGNING_SHA256 -R x64Eddie/noopapp --body <sha256 of the signing cert>
+        env:
+          EXPECTED_SHA256: ${{ vars.SIGNING_SHA256 }}
         run: |
-          expected=0391a6b4a87ab93ed874028b968d17ca353a55f73f02206eb1abe52bef9b19b3
+          if [ -z "$EXPECTED_SHA256" ]; then
+            echo "::error::SIGNING_SHA256 repo variable is not set; cannot verify the built APK's signer."
+            exit 1
+          fi
+          expected="$EXPECTED_SHA256"
           signer=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
           actual=$("$signer" verify --print-certs app/build/outputs/apk/full/release/app-full-release.apk \
             | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
