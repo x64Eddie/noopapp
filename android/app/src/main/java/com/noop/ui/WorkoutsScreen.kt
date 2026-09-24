@@ -1531,6 +1531,34 @@ internal fun WorkoutDetailSheet(vm: AppViewModel, row: WorkoutRow, onDismiss: ()
             steps?.let { DetailRow("Steps", "${grouped(it.toDouble())} steps") }  // #398, on-foot sports
             if (!row.notes.isNullOrBlank()) DetailRow("Notes", row.notes)
 
+            // The recorded route: offline outline by default, over OSM street tiles once the user opts in.
+            row.routePolyline?.takeIf { it.isNotBlank() }?.let { poly ->
+                val mapCtx = LocalContext.current
+                var tiles by remember { mutableStateOf(NoopPrefs.routeMapTiles(mapCtx)) }
+                CardDivider()
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Overline("Route", modifier = Modifier.weight(1f))
+                    Text(
+                        if (tiles) "Hide street map" else "Show street map",
+                        style = NoopType.footnote,
+                        color = Palette.accent,
+                        modifier = Modifier.clickable {
+                            tiles = !tiles
+                            NoopPrefs.setRouteMapTiles(mapCtx, tiles)
+                        },
+                    )
+                }
+                if (tiles) RouteMap(poly) else RouteCanvas(poly)
+                if (!tiles) {
+                    Text(
+                        "The street map downloads map tiles for this area from openstreetmap.org. " +
+                            "The outline above never leaves your phone.",
+                        style = NoopType.footnote,
+                        color = Palette.textTertiary,
+                    )
+                }
+            }
+
             // Export the recorded GPS route as a GPX/FIT file (Strava / Garmin Connect / any GPS app).
             // Only when a route with a drawable path was recorded; the file is built on-device and shared.
             row.routePolyline?.let { poly ->
