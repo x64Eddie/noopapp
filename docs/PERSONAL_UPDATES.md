@@ -34,6 +34,6 @@ adb install -r app/build/outputs/apk/full/release/app-full-release.apk
 ## Pulling upstream
 
 ```bash
-git fetch ryanbr && git rebase ryanbr/main   # on a branch; resolve, test, then merge to main
+git fetch upstream && git rebase upstream/main   # upstream = ryanbr/noop; on a branch, test, then merge
 ```
 Upstream Room migrations run on first launch; the chain has no destructive fallback, so data is kept.
