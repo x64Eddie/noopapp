@@ -685,6 +685,7 @@ fun SettingsScreen(
     var rhythmEnabled by remember { mutableStateOf(RhythmConsent.isEnabled(context)) }
     var coachSignals by remember { mutableStateOf(NoopPrefs.coachSignals(context)) }
     var autoDetectWorkouts by remember { mutableStateOf(NoopPrefs.autoDetectWorkouts(context)) }
+    var autoEndWorkouts by remember { mutableStateOf(NoopPrefs.autoEndWorkouts(context)) }
     var journalReminder by remember { mutableStateOf(NoopPrefs.journalReminderEnabled(context)) }
     // Keep the screen on during a manual workout recording (#703), default OFF. The live-workout
     // screen reads this same "workoutKeepScreenOn" key. String shared verbatim with the iOS/Mac twin
@@ -3315,6 +3316,16 @@ fun SettingsScreen(
                     onCheckedChange = {
                         autoDetectWorkouts = it
                         NoopPrefs.setAutoDetectWorkouts(context, it)
+                    },
+                )
+                SettingsRowDivider()
+                SettingsToggleRow(
+                    title = "Auto-end forgotten workouts",
+                    detail = "If you start a workout and forget to stop it, NOOP notices when your heart rate (and, with GPS, your movement) has settled back to rest. After 10 minutes it asks whether to end it; after 45 it ends it for you, trimmed back to when you actually stopped. On this phone only.",
+                    checked = autoEndWorkouts,
+                    onCheckedChange = {
+                        autoEndWorkouts = it
+                        NoopPrefs.setAutoEndWorkouts(context, it)
                     },
                 )
                 SettingsRowDivider()

@@ -351,6 +351,9 @@
         <receiver
             android:name="com.noop.alarm.SmartAlarmReceiver"
             android:exported="false" />
+        <receiver
+            android:name="com.noop.notif.WorkoutEndActionReceiver"
+            android:exported="false" />
 
         <!-- Re-arms the persisted hard-deadline alarm after a reboot so an overnight restart can't
              silently drop the user's wake. -->

@@ -1216,6 +1216,19 @@ object NoopPrefs {
         of(context).edit().putBoolean(KEY_AUTO_DETECT_WORKOUTS, enabled).apply()
     }
 
+    /** "Auto-end forgotten workouts". When ON, a manually-started workout whose heart rate (and, for GPS,
+     *  movement) has settled back to rest is offered an End notification after 10 minutes and closed on its
+     *  own after 45, trimmed to when activity stopped ([com.noop.analytics.WorkoutEndDetector]). Default ON:
+     *  a session left open for hours drains the battery (GPS, per-second rescoring) and ruins its own stats. */
+    const val KEY_AUTO_END_WORKOUTS = "noop.autoEndWorkouts"
+
+    fun autoEndWorkouts(context: Context): Boolean =
+        of(context).getBoolean(KEY_AUTO_END_WORKOUTS, true)
+
+    fun setAutoEndWorkouts(context: Context, enabled: Boolean) {
+        of(context).edit().putBoolean(KEY_AUTO_END_WORKOUTS, enabled).apply()
+    }
+
     fun journalReminderEnabled(context: Context): Boolean =
         of(context).getBoolean(KEY_JOURNAL_REMINDER_ENABLED, true)
 

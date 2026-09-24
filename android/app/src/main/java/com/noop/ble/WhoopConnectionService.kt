@@ -30,6 +30,7 @@ import com.noop.location.GpsSession
 import com.noop.location.LocationTracker
 import com.noop.notif.BatteryAlertNotifier
 import com.noop.notif.IllnessAlertNotifier
+import com.noop.notif.WorkoutEndWatch
 import com.noop.ui.LiveConsoleReadout
 import com.noop.ui.NoopPrefs
 import com.noop.ui.appLaunchIntent
@@ -39,6 +40,7 @@ import com.noop.widget.WidgetSnapshotStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.catch
@@ -158,6 +160,8 @@ class WhoopConnectionService : Service() {
      *  is what makes route tracking survive the screen turning off (#215): the collection lives on the
      *  always-on service, not the Activity-scoped ViewModel that Android cancels when it's cleared. */
     private var gpsGateJob: Job? = null
+    /** Feeds [WorkoutEndWatch] live HR and a once-a-minute evaluation; see [onStartCommand]. */
+    private var workoutEndJob: Job? = null
 
     /** The actual location collector, alive only while a GPS workout is in flight. Cancelled (which
      *  removes the LocationManager updates via the stream's awaitClose) the moment the workout ends. */
@@ -561,6 +565,22 @@ class WhoopConnectionService : Service() {
         // ViewModel only observes that shared route. Gated on the active flag so the location radio is
         // off (and the FGS's location type unused) outside a GPS workout. Re-`start`s land here, so we
         // cancel + relaunch the gate, never stack collectors.
+        // Watch a running manual workout for its real end (#auto-end) while the UI may be gone: live HR in,
+        // one evaluation a minute. Both calls return at once when no workout is running, and the delay
+        // does not hold a wakelock, so an idle service pays nothing for it.
+        workoutEndJob?.cancel()
+        workoutEndJob = scope.launch {
+            launch {
+                ble.state.collect { s ->
+                    s.heartRate?.let { WorkoutEndWatch.ingestHr(this@WhoopConnectionService, it, System.currentTimeMillis()) }
+                }
+            }
+            while (true) {
+                runCatching { WorkoutEndWatch.tick(this@WhoopConnectionService, System.currentTimeMillis()) }
+                delay(60_000L)
+            }
+        }
+
         gpsGateJob?.cancel()
         gpsGateJob = scope.launch {
             GpsSession.state
