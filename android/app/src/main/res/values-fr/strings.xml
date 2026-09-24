@@ -1623,6 +1623,7 @@
     <string name="nav_noop_limitations">Limites de NOOP</string>
     <string name="nav_data_sources">Sources de données</string>
     <string name="nav_backup_sync">Sauvegarde et synchronisation</string>
+    <string name="nav_whoop_sync">Synchronisation Open Wearables</string>
     <string name="nav_fused_record">Vos données, fusionnées</string>
     <string name="nav_notifications">Notifications</string>
     <string name="nav_support">Assistance</string>

@@ -40,6 +40,7 @@
     <string name="nav_noop_limitations">NOOP 限制</string>
     <string name="nav_data_sources">数据源</string>
     <string name="nav_backup_sync">备份与同步</string>
+    <string name="nav_whoop_sync">Open Wearables 同步</string>
     <string name="nav_fused_record">融合数据</string>
     <string name="nav_notifications">通知</string>
     <string name="nav_support">帮助与支持</string>
