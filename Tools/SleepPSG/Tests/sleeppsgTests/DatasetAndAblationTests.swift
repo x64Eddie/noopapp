@@ -382,30 +382,48 @@ final class MotionQuiescentClampTests: XCTestCase {
     /// sees it. Ablating the clamp must recover some wake there that the shipped clamp fully suppresses.
     func testAblatedClampRecoversWakeOnASustainedStillElevatedBlock() {
         let start = 1_700_000_000
-        let baselineDur = 4 * 60 * 60
-        let awakeDur = 60 * 60
-        let totalDur = baselineDur + awakeDur
+        // The block sits shortly after onset, not at the end of the night: `rem`'s cycle-prior term
+        // (`cyclePrior`) and the #930 REM-latency guard both key off minutes-since-onset, and only this
+        // placement keeps `rem`'s emission from competing with `awake` for the block (verified by hand
+        // against `RecipePort.stageEpochs` — see the PR description, not restated here as a second,
+        // driftable copy of the arithmetic).
+        let leadDur = 20 * 60
+        let blockDur = 60 * 60
+        let tailDur = 220 * 60
+        let totalDur = leadDur + blockDur + tailDur
         // Gravity never moves — not walking, not even a turn-over — for the whole night.
         let grav = (0..<totalDur).map { GravitySample(ts: start + $0, x: 0, y: 0, z: 1.0) }
-        // Baseline ~50 bpm sleeping HR, elevated ~90 bpm for the last hour — both with the same small
-        // jitter `elevatedFlatHR` uses elsewhere, so hrVar is never a degenerate constant zero.
+        // Flat ~50 bpm outside the block. Inside it, HR is elevated AND erratic (±15 bpm square wave,
+        // 30 s period) rather than a flat shifted mean: the recipe's dominant cardiac signal is HR
+        // *instability* (`deepZhv`/`awakeZhv`, weight 1.1/0.8) over the window-level stdev `hrVar`, not
+        // the mean level (`awakeZhr`, weight 0.4 only) `hr` itself feeds — a flat-but-shifted elevated HR
+        // under-drives the exact emission term this clamp gates, which is why this fixture previously
+        // scored zero wake minutes under EITHER setting and could not tell the clamp apart from the rest
+        // of the recipe (the failure this replaces).
         let hr = (0..<totalDur).map { i -> HRSample in
-            let base = i >= baselineDur ? 90 : 50
-            return HRSample(ts: start + i, bpm: base + (i / 90) % 3)
+            if i >= leadDur && i < leadDur + blockDur {
+                let inBlock = i - leadDur
+                return HRSample(ts: start + i, bpm: (inBlock / 15) % 2 == 0 ? 75 : 105)
+            }
+            return HRSample(ts: start + i, bpm: 50)
         }
 
-        // Wake MINUTES overlapping the elevated block, by direct segment overlap — the same pattern
+        // Wake MINUTES overlapping the block, by direct segment overlap — the same pattern
         // `testWalkingGapWithinStillNightScoresWake_V2` uses, which sidesteps any epoch-index arithmetic.
-        func elevatedBlockWakeMinutes(_ cfg: RecipeConfig) -> Double {
+        func blockWakeMinutes(_ cfg: RecipeConfig) -> Double {
             let segs = V2Recipe.stageSession(start: start, end: start + totalDur, grav: grav, hr: hr,
                                              rr: [], resp: [], cfg: cfg)
-            let blockStart = start + baselineDur, blockEnd = start + totalDur
+            let blockStart = start + leadDur, blockEnd = start + leadDur + blockDur
             return segs.filter { $0.stage == "wake" && $0.end > blockStart && $0.start < blockEnd }
                 .reduce(0.0) { $0 + Double(min($1.end, blockEnd) - max($1.start, blockStart)) } / 60.0
         }
 
-        let shippedWake = elevatedBlockWakeMinutes(.shipped)
-        let offWake = elevatedBlockWakeMinutes(Variants.motionClampOff.config)
+        let shippedWake = blockWakeMinutes(.shipped)
+        let offWake = blockWakeMinutes(Variants.motionClampOff.config)
+        XCTAssertEqual(shippedWake, 0.0, accuracy: 1e-9,
+                       "sanity check on the fixture itself: the shipped clamp always caps the quiescent "
+                       + "awake term at <= the always-better light prior, so it must fully suppress here "
+                       + "regardless of how extreme the cardiac evidence is")
         XCTAssertGreaterThan(offWake, shippedWake,
                              "ablating the clamp must recover some wake minutes on the still, elevated block")
     }
