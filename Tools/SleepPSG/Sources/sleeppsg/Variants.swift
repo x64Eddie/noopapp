@@ -156,6 +156,42 @@ enum Variants {
                        note: "c<0.12 step in the fraction domain, single Viterbi pass", config: c)
     }
 
+    /// The motion-quiescent cardiac clamp (`SleepStagerV2.motionQuiescent` / `#348`'s surviving-in-spirit
+    /// flat-HR fix) with its SUPPRESSION REMOVED — the ablation baseline, not a candidate. Quantifies what
+    /// the clamp costs in wake sensitivity: whatever this row's `wakeSens` gives up relative to incumbent is
+    /// exactly the epochs the clamp is currently holding down on a still, elevated-HR epoch — the reported
+    /// failure shape ("awake an hour, in bed, not walking"). If this row's wake bias also blows out the way
+    /// #348's did on a flat-HR hot night, that is the cost of reverting outright rather than bounding it.
+    static var motionClampOff: Variant {
+        var c = RecipeConfig.shipped
+        c.awakeMotionClampThreshold = 0.0
+        return Variant(name: "motion-clamp OFF (ablation)",
+                       note: "awakeMotionClampThreshold ∞→0 — clamp never suppresses", config: c)
+    }
+
+    /// Bounded by MAGNITUDE: the clamp still absorbs a cardiac elevation up to the threshold (the flat-HR
+    /// hot/fever case #348 exists to hold down), but anything beyond it leaks through unclamped, so a large
+    /// sustained elevation can still read wake on a still epoch. Two thresholds bracket the question —
+    /// loose then tight — since the shipped clamp has no magnitude term to compare against at all.
+    static func motionClampBoundedMagnitude(_ threshold: Double) -> Variant {
+        var c = RecipeConfig.shipped
+        c.awakeMotionClampThreshold = threshold
+        return Variant(name: "motion-clamp mag≤\(threshold) (bounded)",
+                       note: "awakeMotionClampThreshold ∞→\(threshold) — clamp caps at this magnitude, excess leaks through",
+                       config: c)
+    }
+
+    /// Bounded by DURATION: the clamp holds for an isolated elevated-but-still epoch but releases once the
+    /// elevation has been sustained, motionless, for `epochs` consecutive 30 s epochs — a single warm epoch
+    /// stays suppressed, a genuine hour-long awake-in-bed run is not. `4` ≈ 2 min, `10` ≈ 5 min.
+    static func motionClampSustained(_ epochs: Int) -> Variant {
+        var c = RecipeConfig.shipped
+        c.awakeMotionClampSustainEpochs = epochs
+        return Variant(name: "motion-clamp sustain≥\(epochs)ep (bounded)",
+                       note: "awakeMotionClampSustainEpochs 0→\(epochs) — clamp lifts once the elevation has held that long",
+                       config: c)
+    }
+
     /// The shipped recipe itself, so a table row exists to difference against.
     static var incumbent: Variant {
         Variant(name: "incumbent (shipped)", note: "SleepStagerV2 as it ships today", config: .shipped)
@@ -163,6 +199,8 @@ enum Variants {
 
     static var all: [Variant] {
         [incumbent, deepPriorBefore, pr987, p348Priors, p348Motion, p348Emissions, p348DeepGate,
-         p348Deadzone, p348OtherRows, p348All, preNine30Guard]
+         p348Deadzone, p348OtherRows, p348All, preNine30Guard,
+         motionClampOff, motionClampBoundedMagnitude(1.0), motionClampBoundedMagnitude(2.0),
+         motionClampSustained(4), motionClampSustained(10)]
     }
 }
