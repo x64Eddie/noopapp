@@ -1502,6 +1502,12 @@ private fun Hero(
             if (stageCoverage != null && stageCoverage < HypnogramCoverage.minCoverage) {
                 SleepPartialNote(stageCoverage)
             }
+            // Wake-detection limitation: wrist devices under-detect brief in-bed awakenings (30.8%
+            // wake sensitivity against PSG, bias −4.92 pp, PhysioNet sleep-accel, 31 subjects /
+            // 26,773 epochs). A 0-disturbance night is the natural floor of this measurement, not
+            // a certified silent night. Always-on so a user reading a low disturbance count sees
+            // the measurement limitation named beside the figure. Mirrors iOS SleepView.wakeDetectionNote.
+            SleepWakeDetectionNote()
         }
         // Naps card (#508/#518): the day's blocks OTHER than the main night, each editable / deletable
         // with the SAME mechanism main sleep uses, plus a Main / Nap(s) / Total split so what drives the
@@ -1613,6 +1619,38 @@ private fun OuraRawStagesNote() {
             style = NoopType.caption,
             color = Palette.textTertiary,
         )
+    }
+}
+
+/**
+ * Honest note on wake-detection sensitivity: wrist devices under-call brief in-bed awakenings, so a
+ * 0-disturbance or low-Awake night is the expected output floor of the measurement, not a certified
+ * silent night. The PSG-measured wake sensitivity of the shipped stager is 30.8% (bias −4.92 pp,
+ * PhysioNet sleep-accel, 31 subjects / 26,773 epochs), consistent with published wrist-device
+ * literature (Chinoy et al. 2021). WHOOP 4.0 has no band sleep_state stream, so staging relies on
+ * cardiorespiratory signals alone; the stager is the same for all straps but the 4.0 measurement
+ * floor is higher. No numbers are corrected upward; this note names the known limitation next to
+ * the figures it affects so the reader reads both together.
+ *
+ * The note is always-on: a 0-disturbance night is presented with the same confidence as any other
+ * figure without it, and leaving a reported count without its measurement caveat is presenting
+ * a gap as certainty. Wrapped in a NoopCard, mirroring iOS SleepView.wakeDetectionNote.
+ */
+@Composable
+private fun SleepWakeDetectionNote() {
+    NoopCard(padding = Metrics.cardPadding, tint = Palette.restColor) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        ) {
+            SourceBadge(text = uiString(R.string.l10n_sleep_screen_on_device_1b4ae650), tint = Palette.restColor)
+            Text(
+                uiString(R.string.l10n_sleep_screen_brief_in_bed_awakenings_are_c8f0a7e8),
+                style = NoopType.caption,
+                color = Palette.textTertiary,
+            )
+        }
     }
 }
 

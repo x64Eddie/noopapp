@@ -90,6 +90,20 @@ before it can tell a high night from a low one, so it shows a countdown instead 
 Tapping **Recalibrate baseline** restarts that countdown from zero — it discards the nights already
 banked. If you're sitting at "Calibrating" and tap it again, you reset your own progress.
 
+## Why does my sleep show so few Awake minutes or Disturbances?
+
+Wrist-worn devices commonly under-call brief wake episodes. NOOP's on-device stager detects sleep
+well but wakes poorly — measured wake sensitivity is 30.8% against polysomnography (bias −4.92 pp,
+31 subjects, 26,773 epochs, PhysioNet sleep-accel), consistent with broader literature finding
+wrist-device wake specificity at 0.18–0.54 (Chinoy et al. 2021). A 0-disturbance night — or one
+with only a few awake minutes — typically still contains brief in-bed awakenings the strap cannot
+resolve; the figure is kept honest and not corrected upward.
+
+Efficiency and Rest are correspondingly high on quiet nights for the same reason: the stager
+scores sleep where the wearer was not consciously awake, and the fraction of missed brief
+arousals lifts both efficiency and the score. The totals are kept as-is; this note names the
+known limitation.
+
 ## Is NOOP a medical device?
 
 No. It is not a medical device and makes no diagnostic claim. Values are raw readings or
