@@ -67,6 +67,29 @@ struct RecipeConfig: Equatable {
     /// shipped state — `dz` is then the identity, so the shipped emission is reproduced exactly.
     var awakeDeadzone: Double
 
+    /// Bounds on `SleepStagerV2.motionQuiescent`'s clamp of the AWAKE emission's cardiac term on a still
+    /// epoch (`min(0.0, awakeCardiac0)`, which never lets a raised-but-motionless HR vote for wake at all).
+    /// Both knobs are measurement-only — `RecipeConfig.shipped` sets them to reproduce that clamp exactly —
+    /// and exist to answer two questions the clamp's own PR could not: what wake sensitivity it costs, and
+    /// whether a bounded version keeps the #348 false-wake fix for a flat-HR hot/fever night while still
+    /// letting a genuinely awake, motionless epoch (elevated HR, no walking) read wake.
+    ///
+    /// `awakeMotionClampThreshold` — the raw cardiac term is suppressed only up to this magnitude; any
+    /// excess ABOVE it leaks through unclamped. `.infinity` (shipped) suppresses without limit, i.e. the
+    /// current clamp; `0.0` is the clamp fully OFF — the ablation baseline that quantifies what the clamp
+    /// costs; a finite value is the bounded candidate, still absorbing a small/moderate elevation (the
+    /// fever/hot-room case) but exposing a large one. Never touches an epoch whose raw term is already
+    /// ≤ 0 (pro-sleep evidence), on any setting — that invariant is independent of the threshold.
+    ///
+    /// `awakeMotionClampSustainEpochs` — once a motion-quiescent epoch's raw cardiac term has been positive
+    /// for this many CONSECUTIVE epochs (reset the instant the epoch moves or the term is no longer
+    /// positive), the clamp stops applying for the rest of that run — an isolated elevated-but-still epoch
+    /// stays suppressed, a sustained one is let through. `0` (shipped) disables this — the run length never
+    /// matters — so sustain and threshold compose independently; either alone reproduces the shipped clamp
+    /// when the other is at its shipped value.
+    var awakeMotionClampThreshold: Double
+    var awakeMotionClampSustainEpochs: Int
+
     // Per-epoch log-emission coefficients.
     var deepZhv: Double, deepZhr: Double, deepZmv: Double
     var remZhv: Double, remZmv: Double, remZhr: Double
@@ -92,6 +115,7 @@ struct RecipeConfig: Equatable {
         jerkFloorMoveMult: 38.0, jerkFloorGateMult: 55.0, motionGateBoost: 2.0,
         respWeight: 0.6,
         awakeDeadzone: 0.0,
+        awakeMotionClampThreshold: .infinity, awakeMotionClampSustainEpochs: 0,
         deepZhv: -1.1, deepZhr: 0.0, deepZmv: -0.5,
         remZhv: 0.6, remZmv: -0.6, remZhr: 0.4,
         awakeZmv: 1.0, awakeZhv: 0.8, awakeZhr: 0.4,
@@ -367,6 +391,20 @@ enum V2Recipe {
         f.moveFrac <= 0.0 && f.jerkMax <= f.jerkScale * cfg.jerkFloorGateMult
     }
 
+    /// The bounded form of `SleepStagerV2`'s motion-quiescent clamp — see the field docs on
+    /// `awakeMotionClampThreshold` / `awakeMotionClampSustainEpochs`. `quiescentElevatedRun` is the number
+    /// of CONSECUTIVE motion-quiescent epochs, ending at and including this one, whose raw cardiac term
+    /// has been positive; the caller tracks it sequentially because the clamp's release-by-duration knob
+    /// needs it. An epoch whose raw term is ≤ 0 is pro-sleep evidence and is returned unchanged on every
+    /// setting, matching the shipped clamp's own invariant.
+    static func motionQuiescentCardiac(raw: Double, quiescentElevatedRun: Int, cfg: RecipeConfig) -> Double {
+        if raw <= 0.0 { return raw }
+        if cfg.awakeMotionClampSustainEpochs > 0 && quiescentElevatedRun >= cfg.awakeMotionClampSustainEpochs {
+            return raw
+        }
+        return max(0.0, raw - cfg.awakeMotionClampThreshold)
+    }
+
     static func remLatencyGuard(_ minutesSinceOnset: Double, _ cfg: RecipeConfig) -> Double {
         cfg.remLatencyPenalty * min(1.0, max(0.0, 1.0 - minutesSinceOnset / cfg.remLatencyMinutes))
     }
@@ -440,12 +478,17 @@ enum V2Recipe {
 
         var seq: [[String: Double]] = []
         seq.reserveCapacity(feats.count)
+        var quiescentElevatedRun = 0
         for f in feats {
             let zhrv = zhr(f.hr), zhvv = zhv(f.hrVar), zmvv = zmv(f.moveFrac)
             let gate = cfg.deepGateSlope * max(0.0, fpct(f.hrFlat11) - cfg.deepGateThresh)
             let awakeCardiac0 = cfg.awakeZhv * dz(zhvv, cfg.awakeDeadzone)
                 + cfg.awakeZhr * dz(zhrv, cfg.awakeDeadzone)
-            let awakeCardiac = motionQuiescent(f, cfg) ? min(0.0, awakeCardiac0) : awakeCardiac0
+            let quiescent = motionQuiescent(f, cfg)
+            quiescentElevatedRun = (quiescent && awakeCardiac0 > 0.0) ? quiescentElevatedRun + 1 : 0
+            let awakeCardiac = quiescent
+                ? motionQuiescentCardiac(raw: awakeCardiac0, quiescentElevatedRun: quiescentElevatedRun, cfg: cfg)
+                : awakeCardiac0
             var em: [String: Double] = [
                 "deep": cfg.deepZhv * zhvv + cfg.deepZhr * zhrv + cfg.deepZmv * zmvv - gate + prior["deep"]!,
                 "rem": cfg.remZhv * zhvv + cfg.remZmv * zmvv + cfg.remZhr * zhrv + prior["rem"]!,

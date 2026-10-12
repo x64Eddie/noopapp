@@ -292,4 +292,121 @@ final class VariantsTests: XCTestCase {
         XCTAssertEqual(all.transition["awake"]!, Variants.awakeRowPR987,
                        "#348's awake row is the one #987 later restored")
     }
+
+    /// Each motion-quiescent clamp variant must change exactly the one field its name claims, same
+    /// discipline as every other row in this table.
+    func testMotionClampVariantsAreSingleNamedChanges() {
+        let s = RecipeConfig.shipped
+        XCTAssertEqual(s.awakeMotionClampThreshold, .infinity, "shipped must never leak a clamped epoch")
+        XCTAssertEqual(s.awakeMotionClampSustainEpochs, 0, "shipped must never release the clamp by duration")
+
+        var off = Variants.motionClampOff.config
+        XCTAssertEqual(off.awakeMotionClampThreshold, 0.0)
+        off.awakeMotionClampThreshold = s.awakeMotionClampThreshold
+        XCTAssertEqual(off, s)
+
+        for t in [1.0, 2.0] {
+            var m = Variants.motionClampBoundedMagnitude(t).config
+            XCTAssertEqual(m.awakeMotionClampThreshold, t)
+            m.awakeMotionClampThreshold = s.awakeMotionClampThreshold
+            XCTAssertEqual(m, s)
+        }
+
+        for n in [4, 10] {
+            var d = Variants.motionClampSustained(n).config
+            XCTAssertEqual(d.awakeMotionClampSustainEpochs, n)
+            d.awakeMotionClampSustainEpochs = s.awakeMotionClampSustainEpochs
+            XCTAssertEqual(d, s)
+        }
+    }
+}
+
+/// The bounded forms of the motion-quiescent cardiac clamp (`V2Recipe.motionQuiescentCardiac`), tested at
+/// the function level so the shape of each knob is pinned independently of a full night's staging.
+final class MotionQuiescentClampTests: XCTestCase {
+
+    /// Pro-sleep evidence (raw ≤ 0) must pass through unchanged on every setting — the invariant the
+    /// shipped clamp documents and every bounded variant must preserve.
+    func testNonPositiveRawIsNeverTouched() {
+        var cfg = RecipeConfig.shipped
+        cfg.awakeMotionClampThreshold = 0.0
+        cfg.awakeMotionClampSustainEpochs = 1
+        for raw in [-3.0, -0.5, 0.0] {
+            XCTAssertEqual(V2Recipe.motionQuiescentCardiac(raw: raw, quiescentElevatedRun: 99, cfg: cfg), raw)
+        }
+    }
+
+    /// The shipped setting (threshold ∞, sustain 0) must reproduce the original `min(0.0, raw)` clamp on a
+    /// positive raw term, regardless of how long the elevation has run.
+    func testShippedSettingFullySuppresses() {
+        let cfg = RecipeConfig.shipped
+        for run in [1, 5, 100] {
+            XCTAssertEqual(V2Recipe.motionQuiescentCardiac(raw: 1.4, quiescentElevatedRun: run, cfg: cfg), 0.0)
+        }
+    }
+
+    /// Threshold 0 is the clamp fully OFF — the ablation baseline — so a positive raw term leaks through
+    /// at full strength.
+    func testThresholdZeroDisablesTheClamp() {
+        var cfg = RecipeConfig.shipped
+        cfg.awakeMotionClampThreshold = 0.0
+        XCTAssertEqual(V2Recipe.motionQuiescentCardiac(raw: 1.4, quiescentElevatedRun: 1, cfg: cfg), 1.4,
+                       accuracy: 1e-12)
+    }
+
+    /// A finite threshold absorbs the elevation up to that magnitude and lets only the excess through.
+    func testBoundedMagnitudeLeaksOnlyTheExcess() {
+        var cfg = RecipeConfig.shipped
+        cfg.awakeMotionClampThreshold = 1.0
+        XCTAssertEqual(V2Recipe.motionQuiescentCardiac(raw: 0.6, quiescentElevatedRun: 1, cfg: cfg), 0.0,
+                       accuracy: 1e-12, "below the threshold, still fully absorbed")
+        XCTAssertEqual(V2Recipe.motionQuiescentCardiac(raw: 1.9, quiescentElevatedRun: 1, cfg: cfg), 0.9,
+                       accuracy: 1e-12, "above the threshold, only the excess leaks through")
+    }
+
+    /// The sustain knob holds the clamp below the run length and releases it (full raw, ignoring threshold)
+    /// once the elevation has held for that many consecutive quiescent epochs.
+    func testSustainedRunReleasesTheClampRegardlessOfThreshold() {
+        var cfg = RecipeConfig.shipped
+        cfg.awakeMotionClampThreshold = .infinity   // would fully suppress if sustain did not override it
+        cfg.awakeMotionClampSustainEpochs = 4
+        XCTAssertEqual(V2Recipe.motionQuiescentCardiac(raw: 1.4, quiescentElevatedRun: 3, cfg: cfg), 0.0,
+                       "below the sustain length, the clamp still holds")
+        XCTAssertEqual(V2Recipe.motionQuiescentCardiac(raw: 1.4, quiescentElevatedRun: 4, cfg: cfg), 1.4,
+                       accuracy: 1e-12, "at the sustain length, the clamp releases")
+    }
+
+    /// A night with a low-HR sleeping baseline and a one-hour STILL, ELEVATED, non-walking block in the
+    /// middle — the reported failure shape ("awake an hour, in bed, not walking"). The elevated block reads
+    /// high only RELATIVE to this same night's own baseline, exactly how the recipe's per-night z-scoring
+    /// sees it. Ablating the clamp must recover some wake there that the shipped clamp fully suppresses.
+    func testAblatedClampRecoversWakeOnASustainedStillElevatedBlock() {
+        let start = 1_700_000_000
+        let baselineDur = 4 * 60 * 60
+        let awakeDur = 60 * 60
+        let totalDur = baselineDur + awakeDur
+        // Gravity never moves — not walking, not even a turn-over — for the whole night.
+        let grav = (0..<totalDur).map { GravitySample(ts: start + $0, x: 0, y: 0, z: 1.0) }
+        // Baseline ~50 bpm sleeping HR, elevated ~90 bpm for the last hour — both with the same small
+        // jitter `elevatedFlatHR` uses elsewhere, so hrVar is never a degenerate constant zero.
+        let hr = (0..<totalDur).map { i -> HRSample in
+            let base = i >= baselineDur ? 90 : 50
+            return HRSample(ts: start + i, bpm: base + (i / 90) % 3)
+        }
+
+        // Wake MINUTES overlapping the elevated block, by direct segment overlap — the same pattern
+        // `testWalkingGapWithinStillNightScoresWake_V2` uses, which sidesteps any epoch-index arithmetic.
+        func elevatedBlockWakeMinutes(_ cfg: RecipeConfig) -> Double {
+            let segs = V2Recipe.stageSession(start: start, end: start + totalDur, grav: grav, hr: hr,
+                                             rr: [], resp: [], cfg: cfg)
+            let blockStart = start + baselineDur, blockEnd = start + totalDur
+            return segs.filter { $0.stage == "wake" && $0.end > blockStart && $0.start < blockEnd }
+                .reduce(0.0) { $0 + Double(min($1.end, blockEnd) - max($1.start, blockStart)) } / 60.0
+        }
+
+        let shippedWake = elevatedBlockWakeMinutes(.shipped)
+        let offWake = elevatedBlockWakeMinutes(Variants.motionClampOff.config)
+        XCTAssertGreaterThan(offWake, shippedWake,
+                             "ablating the clamp must recover some wake minutes on the still, elevated block")
+    }
 }

@@ -443,6 +443,9 @@ if want("variants") {
         + stageOrder.flatMap { ["\($0)_precision", "\($0)_recall", "\($0)_f1", "\($0)_pct", "\($0)_bias_pp"] }
         + ["median_rem_latency_min", "rem_latency_mae_min"]).joined(separator: ",")]
     var base: (kappa: Double, remF1: Double, wakeSens: Double)?
+    // Rows for the motion-quiescent clamp variants (plus incumbent), kept keyed by name so the
+    // sparse-vs-dense-motion stratification below can re-score them per subject group without re-staging.
+    var motionClampRows: [String: [Scored]] = [:]
     // Wake SENSITIVITY is in the table beside kappa because it is the quantity #987 was landed on against
     // the strap's band state (16.0 % → 17.6 %). Printing it here is what makes that claim checkable against
     // truth rather than merely restated.
@@ -451,6 +454,7 @@ if want("variants") {
         let rows = v.name.hasPrefix("incumbent")
             ? shipped
             : subjects.map { score($0, using: stageVariant(v.config)) }
+        if v.name.hasPrefix("incumbent") || v.name.hasPrefix("motion-clamp") { motionClampRows[v.name] = rows }
         let s = summarise(rows)
         let p = pooledPct(rows) { $0.pred }, t = pooledPct(rows) { $0.truth }
         let latMae = mae(zip(s.latencyPairsPred, s.latencyPairsTruth).map { $0 - $1 })
@@ -472,6 +476,68 @@ if want("variants") {
     That conjunction is the lesson of #348 → #437: kappa alone certified a build that mis-called a
     healthy night's wake fraction by 17 percentage points.
     """)
+
+    // 6b. Sparse- vs dense-motion split, for the motion-quiescent clamp variants only.
+    //
+    // sleep-accel is an Apple Watch's ~50 Hz accelerometer — dense motion throughout. WHOOP 4.0 motion is
+    // separately documented as too sparse to reliably separate restless-in-bed from out-of-bed (#345), so a
+    // pooled number from THIS dataset could hide a clamp cost that lands disproportionately on the sparsest-
+    // motion subjects — the nearest proxy this harness has to a 4.0-like night. `quiescent fraction` (the
+    // share of a subject's own epochs `motionQuiescent` calls still) is that proxy, not a WHOOP 4.0
+    // simulation: it is measured on this dataset's own hardware and tells you only whether the clamp's cost
+    // is uniform across subjects or concentrated in the ones whose nights read stillest.
+    if !motionClampRows.isEmpty {
+        var quiescentFrac: [String: Double] = [:]
+        for s in subjects {
+            let (feats, _) = V2Recipe.stageEpochsDetailed(start: s.start, end: s.end, grav: s.grav,
+                                                           hr: s.hr, rr: [], resp: [])
+            guard !feats.isEmpty else { continue }
+            let q = feats.filter { V2Recipe.motionQuiescent($0, .shipped) }.count
+            quiescentFrac[s.id] = Double(q) / Double(feats.count)
+        }
+        let ranked = subjects.compactMap { s in quiescentFrac[s.id].map { (s.id, $0) } }
+            .sorted { $0.1 < $1.1 }
+        let third = max(1, ranked.count / 3)
+        let sparse = Set(ranked.suffix(third).map { $0.0 })        // highest quiescent fraction
+        let dense = Set(ranked.prefix(ranked.count - third).map { $0.0 })
+
+        func wakeSensAndBias(_ rows: [Scored], in ids: Set<String>) -> (wakeSens: Double, bias: Double, n: Int) {
+            let sub = rows.filter { ids.contains($0.subject.id) }
+            guard !sub.isEmpty else { return (.nan, .nan, 0) }
+            var c = Confusion()
+            for r in sub { for i in 0..<r.truth.count { c.add(ref: r.truth[i], pred: r.pred[i]) } }
+            let p = pooledPct(sub) { $0.pred }, t = pooledPct(sub) { $0.truth }
+            return (c.prf("wake").recall * 100, p["wake"]! - t["wake"]!, sub.count)
+        }
+
+        print("""
+
+        6b. MOTION-QUIESCENT CLAMP, SPARSE- VS DENSE-MOTION SUBJECTS
+        sparse-motion third: n=\(sparse.count) subjects, mean quiescent-epoch fraction \
+        \(f(ranked.suffix(third).map { $0.1 }.reduce(0,+) / Double(third) * 100, 5, 1)) %
+        dense-motion rest:   n=\(dense.count) subjects, mean quiescent-epoch fraction \
+        \(f(ranked.prefix(ranked.count - third).map { $0.1 }.reduce(0,+) / Double(max(1, ranked.count - third)) * 100, 5, 1)) %
+
+        variant                          sparse wakeSens  Δ vs incumbent   dense wakeSens  Δ vs incumbent
+        """)
+        let incumbentRows = motionClampRows["incumbent (shipped)"] ?? []
+        let incumbentSparse = wakeSensAndBias(incumbentRows, in: sparse)
+        let incumbentDense = wakeSensAndBias(incumbentRows, in: dense)
+        for v in [Variants.incumbent, Variants.motionClampOff, Variants.motionClampBoundedMagnitude(1.0),
+                  Variants.motionClampBoundedMagnitude(2.0), Variants.motionClampSustained(4),
+                  Variants.motionClampSustained(10)] {
+            guard let rows = motionClampRows[v.name] else { continue }
+            let sp = wakeSensAndBias(rows, in: sparse), de = wakeSensAndBias(rows, in: dense)
+            print("    \(v.name.padding(toLength: 32, withPad: " ", startingAt: 0))\(f(sp.wakeSens, 7, 2))        \(f(sp.wakeSens - incumbentSparse.wakeSens, 7, 2))        \(f(de.wakeSens, 7, 2))        \(f(de.wakeSens - incumbentDense.wakeSens, 7, 2))")
+        }
+        print("""
+
+        If a candidate's Δ wakeSens is larger in the sparse-motion column than the dense one, the clamp's
+        cost (or a fix's benefit) is concentrated in the subjects whose nights look most like a 4.0's sparse
+        motion — the opposite of a number averaged over this dataset's mostly-dense-motion cohort.
+        """)
+    }
+
     if let path = a.csv {
         try? csvLines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
         print("    per-variant CSV written to \(path)")

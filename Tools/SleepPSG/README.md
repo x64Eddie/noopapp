@@ -152,9 +152,23 @@ fraction biases, because a component is an improvement only if it wins the first
 second. **Every percentage and every `bias pp` in this table is pooled over all 26 773 scored epochs** —
 so the incumbent's deep bias reads +5.18 pp here, not the +4.48 pp the per-subject mean gives.
 
-The last row is not a candidate. `pre-#930 REM guard (provenance)` runs the REM-latency guard as it stood
-before PR #930 — a hard `c < 0.12 ? 3.0 : 0.0` step in the session-fraction domain — and exists to explain
-the self-check below.
+The last of the `#348`/`#987` rows is not a candidate. `pre-#930 REM guard (provenance)` runs the
+REM-latency guard as it stood before PR #930 — a hard `c < 0.12 ? 3.0 : 0.0` step in the session-fraction
+domain — and exists to explain the self-check below.
+
+**The motion-quiescent cardiac clamp.** `SleepStagerV2.motionQuiescent` clamps the AWAKE emission's
+cardiac term to `min(0.0, …)` on a still epoch, so a raised-but-motionless HR alone can never vote for
+wake — the fix for a flat-HR hot/fever night, and also the mechanism behind the opposite failure (a
+genuinely awake, motionless, non-walking epoch that can't be called wake on HR evidence either). Five rows
+measure that trade-off without touching the shipped file: `motion-clamp OFF (ablation)` removes the clamp
+entirely (the baseline for what it costs in wake sensitivity); `motion-clamp mag≤1.0 / mag≤2.0 (bounded)`
+still absorb a cardiac elevation up to that magnitude but let anything larger through; `motion-clamp
+sustain≥4ep / sustain≥10ep (bounded)` hold the clamp for an isolated warm epoch but release it once the
+elevation has persisted, motionless, for that many consecutive 30 s epochs (≈2 / ≈5 min). Section 6b
+reports the same wake-sensitivity comparison split by each subject's own quiescent-epoch fraction (sparse-
+motion third vs the rest) — `sleep-accel` is dense-motion Apple Watch data throughout, and WHOOP 4.0 motion
+is separately documented as too sparse to reliably tell restless-in-bed from out-of-bed (#345), so a cost
+concentrated in the sparsest-motion subjects would be invisible in the pooled row alone.
 
 ---
 
