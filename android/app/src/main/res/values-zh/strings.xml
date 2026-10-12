@@ -194,6 +194,7 @@
     <string name="l10n_add_device_wizard_not_showing_up_make_sure_you_60a8a61b">找不到设备？请确保您已在官方 App 中重置了该戒指，并强行退出了官方 App，然后重试。</string>
     <string name="l10n_add_device_wizard_one_phone_at_a_time_cff4ff44">一次只能连接一台手机</string>
     <string name="l10n_add_device_wizard_oura_ring_e3431536">Oura 戒指</string>
+    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">未广播健身数据</string>
     <string name="l10n_add_device_wizard_rescan_84661f6a">重新扫描</string>
     <string name="l10n_add_device_wizard_ring_key_32_hex_characters_28cb7e4a">戒指密钥 (32位十六进制字符)</string>
     <string name="l10n_add_device_wizard_scan_28cba55d">扫描</string>
@@ -773,6 +774,7 @@
     <string name="l10n_sleep_screen_asleep_duration_3638413f">睡眠时长</string>
     <string name="l10n_sleep_screen_asleep_last_night_b969b068">昨晚的睡眠情况</string>
     <string name="l10n_sleep_screen_bedtime_wake_time_b2a22c32">就寝与起床时间</string>
+    <string name="l10n_sleep_screen_brief_in_bed_awakenings_are_c8f0a7e8">所有腕戴设备都经常漏检卧床期间的短暂觉醒——以多导睡眠图为基准，NOOP 的分期器可识别 30.8% 的觉醒时段（偏差 −4.92 个百分点，PhysioNet sleep-accel，31 位受试者 / 26,773 个时段）。WHOOP 4.0 没有腕带 sleep_state 信号，因此分期仅依据心肺数据，测量下限更高。零次干扰的夜晚是预期的测量下限，而非经认证的安睡之夜。数值保持原样。</string>
     <string name="l10n_sleep_screen_consistency_0ea7b95e">规律性</string>
     <string name="l10n_sleep_screen_consistencypct_roundtoint_b23a9d40">%1$s%%</string>
     <string name="l10n_sleep_screen_delete_this_nap_1adf0a3f">删除这条小睡记录</string>
@@ -794,6 +796,7 @@
     <string name="l10n_sleep_screen_no_nights_with_sleep_data_yet_fa71b6b3">目前还没有睡眠数据。戴着手环入睡后，您的睡眠账本将在这里逐渐完善。</string>
     <string name="l10n_sleep_screen_not_enough_history_in_this_range_7e2fd640">该时间范围内历史数据不足。请尝试切换到 3个月、6个月 或 全部 视图。</string>
     <string name="l10n_sleep_screen_not_enough_history_yet_0e2f93b6">历史数据不足</string>
+    <string name="l10n_sleep_screen_on_device_1b4ae650">设备端</string>
     <string name="l10n_sleep_screen_per_night_sleep_balance_ledger_nightcount_f339d0ab">每晚睡眠结余账本：%1$s 晚，净值 %2$s</string>
     <string name="l10n_sleep_screen_percent_2281d326">%1$s%%</string>
     <string name="l10n_sleep_screen_score_roundtoint_a2d1cc99">%1$s%%</string>

@@ -429,6 +429,13 @@ class SourceCoordinator(
                 liveSink = { hr -> liveSink(hr, emptyList()) },  // machine HR → the existing live recorder
                 onBattery = batterySink,                          // machine battery → the same live state
                 log = straplog,
+                // Read the toggle live at connect (twin of polarDebug / hostReceivedDetail above) so the
+                // per-connect FTMS probe readout follows the modes that exist for inspecting a source.
+                probeDetail = {
+                    val tc = com.noop.testcentre.TestCentre.from(ctx)
+                    tc.active(com.noop.testcentre.TestDomain.SOURCES) ||
+                        tc.active(com.noop.testcentre.TestDomain.CONNECTION)
+                },
             )
             SourceKind.huami.name -> {
                 val repo = requireNotNull(repository) { "SourceCoordinator.repository is required to persist Huami samples" }

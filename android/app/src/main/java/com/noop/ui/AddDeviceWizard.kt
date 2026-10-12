@@ -198,7 +198,9 @@ fun AddDeviceWizard(
     fun startScan(t: DeviceType) {
         when {
             t.isWhoop -> viewModel.presentWhoopScan(t.whoopModel ?: WhoopModel.WHOOP4)
-            t == DeviceType.GymEquipment -> ftmsScanner.scan()
+            // With the probe enabled the scan drops its 0x1826 advertisement filter, because equipment can
+            // serve FTMS without advertising it and the filtered scan can never reach such a machine.
+            t == DeviceType.GymEquipment -> ftmsScanner.scan(unfiltered = viewModel.ftmsProbeEnabled())
             t == DeviceType.Amazfit || t == DeviceType.MiBand -> huamiScanner.scan()
             t == DeviceType.Oura -> ouraScanner.scan()
             else -> hrScanner.scan()   // HrStrap AND Garmin (Broadcast HR is the standard 0x180D path)
@@ -539,7 +541,7 @@ fun AddDeviceWizard(
                                     ftmsScanner.stopScan()
                                     step = WizardStep.Confirm
                                 },
-                                onRescan = { ftmsScanner.scan() },
+                                onRescan = { ftmsScanner.scan(unfiltered = viewModel.ftmsProbeEnabled()) },
                             )
                             t == DeviceType.Amazfit || t == DeviceType.MiBand -> HuamiPickStep(
                                 scanner = huamiScanner,
@@ -1014,11 +1016,15 @@ private fun FtmsPickStep(
 ) {
     val discovered by scanner.discovered.collectAsStateWithLifecycle()
     val scanning by scanner.scanning.collectAsStateWithLifecycle()
+    // "Gym equipment" is a claim the scan can only make about a device that advertised 0x1826. A probe
+    // scan is unfiltered, so it also lists devices that advertised no fitness service — which is the one
+    // thing worth knowing about them, and the opposite of what the default subtitle would say.
+    val notAdvertising = uiString(R.string.l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4)
     PickList(searching = scanning, isEmpty = discovered.isEmpty(), onRescan = onRescan) {
         discovered.sortedByDescending { it.rssi }.forEach { machine ->
             DiscoveredRow(
                 name = machine.name,
-                subtitle = "Gym equipment",
+                subtitle = if (machine.advertisesFtms) "Gym equipment" else notAdvertising,
                 rssi = machine.rssi,
                 onTap = { onSelect(machine) },
             )

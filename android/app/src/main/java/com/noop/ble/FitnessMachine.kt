@@ -227,3 +227,108 @@ object StandardBattery {
         return minOf(100, data[0].toInt() and 0xFF)
     }
 }
+
+/**
+ * Pure formatting for the FTMS **capability probe** — the read-only diagnostic that answers "does this
+ * machine actually serve treadmill data, and which fields does it populate?" before anything is built on
+ * top of it. Many iFit-based machines (NordicTrack, ProForm) advertise Heart Rate *receive* without
+ * exposing 0x1826 outbound at all, or expose it with the data characteristic unimplemented — and a
+ * working HR broadcast to the machine is no evidence either way.
+ *
+ * Every string here asserts only what the bytes show: the characteristic, the frame length, the raw flags
+ * word, and which of the fields NOOP surfaces the decode actually populated. It does NOT claim the machine
+ * "supports" or "lacks" a metric in general — one frame is one frame, and a machine may set different flag
+ * bits when it is idle than when it is moving.
+ *
+ * Faithful Kotlin twin of `WhoopProtocol.FTMSProbe`. The output strings are a byte-identical contract
+ * across the two platforms: the same frame must produce the same line on Android and on Apple, so two
+ * field logs from the same machine are directly comparable. Pinned by fixtures shared with
+ * `FTMSDecodeTests.probeFrameSummary…` on the Swift side.
+ */
+object FitnessMachineProbe {
+
+    /**
+     * Byte width of the leading flags field. Cross Trainer Data carries a 24-bit flags word; the other
+     * three carry 16-bit.
+     */
+    fun flagsWidth(kind: FitnessMachine.MachineKind): Int =
+        if (kind == FitnessMachine.MachineKind.CROSS_TRAINER) 3 else 2
+
+    /**
+     * The raw little-endian flags word at the head of a machine-data frame, or null if the UUID is not one
+     * of the four machine-data characteristics or the frame is too short to hold its flags field.
+     */
+    fun flags(uuid16: String, data: ByteArray): Int? {
+        val kind = kindForUuid16(uuid16) ?: return null
+        val width = flagsWidth(kind)
+        if (data.size < width) return null
+        var value = 0
+        for (i in 0 until width) value = value or ((data[i].toInt() and 0xFF) shl (8 * i))
+        return value
+    }
+
+    /**
+     * One log line describing a single machine-data frame: the characteristic, its byte length, the raw
+     * flags word, and which surfaced fields the decode populated versus left empty.
+     *
+     * Returns null when there is nothing attributable to say — an unknown characteristic, or a frame too
+     * short to read its own flags field.
+     */
+    fun frameSummary(uuid16: String, data: ByteArray): String? {
+        val kind = kindForUuid16(uuid16) ?: return null
+        val flags = flags(uuid16, data) ?: return null
+        val reading = FitnessMachine.decode(uuid16, data) ?: return null
+        val width = flagsWidth(kind)
+        val hex = String.format("0x%0${width * 2}X", flags)
+        val present = mutableListOf<String>()
+        val empty = mutableListOf<String>()
+        for ((label, carried) in fieldPresence(reading)) {
+            if (carried) present.add(label) else empty.add(label)
+        }
+        val presentPart = if (present.isEmpty()) "no fields decoded" else "decoded: " + present.joinToString(", ")
+        val emptyPart = if (empty.isEmpty()) "" else " | not in frame: " + empty.joinToString(", ")
+        return "${kind.uuid16} ${data.size}B flags=$hex $presentPart$emptyPart"
+    }
+
+    /**
+     * The fields NOOP surfaces, in a fixed order, each paired with whether this reading carried it. Fixed
+     * order so two log lines (or the two platforms) are directly comparable.
+     */
+    internal fun fieldPresence(reading: FitnessMachine.Reading): List<Pair<String, Boolean>> = listOf(
+        "speed" to (reading.speedKmh != null),
+        "cadence" to (reading.cadence != null),
+        "power" to (reading.powerWatts != null),
+        "distance" to (reading.distanceM != null),
+        "energy" to (reading.totalEnergyKcal != null),
+        "HR" to (reading.heartRate != null),
+        "elapsed" to (reading.elapsedTimeSec != null),
+    )
+
+    /**
+     * A GATT service/characteristic UUID rendered for a log line: the 16-bit short form ("0x1826") when the
+     * UUID sits on the Bluetooth Base UUID, and otherwise the full 128-bit string UNCHANGED.
+     *
+     * A vendor-proprietary UUID is never abbreviated or dropped, because on a machine that serves no
+     * standard fitness service the proprietary ones ARE the finding — abbreviating them to a shared prefix
+     * would make two different vendor services print identically.
+     */
+    fun shortLabel(uuid: String): String {
+        val lower = uuid.lowercase()
+        if (lower.length == 36 &&
+            lower.startsWith("0000") &&
+            lower.endsWith("-0000-1000-8000-00805f9b34fb")
+        ) {
+            return "0x" + lower.substring(4, 8).uppercase()
+        }
+        return uuid
+    }
+
+    /** The machine kind for a 16-bit characteristic UUID short form (case-insensitive). */
+    fun kindForUuid16(uuid16: String): FitnessMachine.MachineKind? = when (uuid16.uppercase()) {
+        "2ACD" -> FitnessMachine.MachineKind.TREADMILL
+        "2AD2" -> FitnessMachine.MachineKind.INDOOR_BIKE
+        "2AD1" -> FitnessMachine.MachineKind.ROWER
+        "2ACE" -> FitnessMachine.MachineKind.CROSS_TRAINER
+        else -> null
+    }
+}

@@ -399,6 +399,70 @@
         }
       }
     },
+    "Pick a time window for a night, then compare reported awakenings against stored streams. Each epoch line shows which channels were actually present for this night (WHOOP 4.0 has no band sleep_state and sparse motion).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle ein Zeitfenster für eine Nacht und vergleiche dann die gemeldeten Wachphasen mit den gespeicherten Streams. Jede Epochenzeile zeigt, welche Kanäle in dieser Nacht tatsächlich vorhanden waren (WHOOP 4.0 hat kein Band-sleep_state und nur spärliche Bewegungsdaten)."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick a time window for a night, then compare reported awakenings against stored streams. Each epoch line shows which channels were actually present for this night (WHOOP 4.0 has no band sleep_state and sparse motion)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige una ventana de tiempo para una noche y compara los despertares registrados con los flujos almacenados. Cada línea de época muestra qué canales estuvieron realmente presentes esa noche (WHOOP 4.0 no tiene sleep_state de la banda y su movimiento es escaso)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez une plage horaire pour une nuit, puis comparez les réveils signalés aux flux enregistrés. Chaque ligne d’époque indique quels canaux étaient réellement présents cette nuit-là (WHOOP 4.0 n’a pas de sleep_state du bracelet et ses données de mouvement sont rares)."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli una finestra temporale per una notte, poi confronta i risvegli segnalati con i flussi memorizzati. Ogni riga di epoca mostra quali canali erano effettivamente presenti quella notte (WHOOP 4.0 non ha lo sleep_state della fascia e il movimento è sporadico)."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wybierz przedział czasu dla nocy, a następnie porównaj raportowane wybudzenia z zapisanymi strumieniami. Każdy wiersz epoki pokazuje, które kanały były faktycznie dostępne tej nocy (WHOOP 4.0 nie ma sygnału sleep_state z opaski, a dane ruchu są rzadkie)."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha um intervalo de tempo para uma noite e compare os despertares reportados com os fluxos armazenados. Cada linha de época mostra que canais estiveram efetivamente presentes nessa noite (o WHOOP 4.0 não tem sleep_state da banda e o movimento é escasso)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите временной интервал для ночи, затем сравните зафиксированные пробуждения с сохранёнными потоками. Каждая строка эпохи показывает, какие каналы действительно были доступны в эту ночь (у WHOOP 4.0 нет сигнала sleep_state с ремешка, а данные движения разрежены)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为某一夜选择一个时间窗口，然后将报告的觉醒次数与存储的数据流进行比较。每个时段行会显示该夜实际存在哪些通道（WHOOP 4.0 没有腕带 sleep_state，且运动数据稀疏）。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "為某一夜選擇一個時間範圍，然後將報告的醒來次數與儲存的資料流比較。每個時段列會顯示該夜實際存在哪些通道（WHOOP 4.0 沒有錶帶 sleep_state，且動作資料稀疏）。"
+          }
+        }
+      }
+    },
     "Reconnect drops the current link, if any, and connects to the ring again. To pair or switch bands, open Devices.": {
       "localizations": {
         "de": {
@@ -1690,6 +1754,70 @@
     "Working sets": { "localizations": {
       "de": {"stringUnit": {"state": "translated", "value": "Arbeitssätze"}}, "es": {"stringUnit": {"state": "translated", "value": "Series efectivas"}}, "fr": {"stringUnit": {"state": "translated", "value": "Séries de travail"}}, "it": {"stringUnit": {"state": "translated", "value": "Serie di lavoro"}}, "pl": {"stringUnit": {"state": "translated", "value": "Serie robocze"}}, "pt-PT": {"stringUnit": {"state": "translated", "value": "Séries de trabalho"}}, "ru": {"stringUnit": {"state": "translated", "value": "Рабочие подходы"}}, "zh-Hans": {"stringUnit": {"state": "translated", "value": "正式组"}}, "zh-Hant": {"stringUnit": {"state": "translated", "value": "正式組"}}
     } },
+    "Wake-evidence readout": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wecknachweis-Auswertung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wake-evidence readout"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lectura de evidencia de despertares"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relevé des preuves de réveil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lettura delle prove di risveglio"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odczyt dowodów wybudzeń"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leitura de evidências de despertares"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сводка признаков пробуждений"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "觉醒证据读数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "醒來證據讀數"
+          }
+        }
+      }
+    },
     "Your strap is already syncing.": {
       "localizations": {
         "de": {
@@ -75979,6 +76107,64 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chronię twoją sesję. Cisza oznacza, że ​​jesteś na dobrej drodze."
+          }
+        }
+      }
+    },
+    "Not advertising fitness data": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sendet keine Fitnessdaten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No anuncia datos de fitness"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "N'annonce pas de données de fitness"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non annuncia dati fitness"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não anuncia dados de fitness"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не передаёт фитнес-данные"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未广播健身数据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未廣播健身數據"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie rozgłasza danych fitness"
           }
         }
       }

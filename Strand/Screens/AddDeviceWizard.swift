@@ -163,7 +163,11 @@ struct AddDeviceWizard: View {
         }
         _hrScanner = StateObject(wrappedValue: StandardHRSource(
             live: live, deviceId: "scan-preview", persist: { _ in }, log: wizardLog))
-        _ftmsScanner = StateObject(wrappedValue: FTMSSource(live: live, log: wizardLog, feedsLive: false))
+        // The wizard never connects, so `probeDetail` only affects the lines a probe SCAN emits. Same
+        // resolver as the scan breadth below, so the two cannot disagree about whether a probe is running.
+        _ftmsScanner = StateObject(wrappedValue: FTMSSource(
+            live: live, log: wizardLog, feedsLive: false,
+            probeDetail: { AppModel.ftmsProbeEnabled() }))
         _huamiScanner = StateObject(wrappedValue: HuamiHRSource(
             live: live, deviceId: "scan-preview", log: wizardLog, feedsLive: false))
         // Discovery-only Oura source: gen defaults to gen3 for the scan-preview command clamp (the real
@@ -1068,7 +1072,7 @@ struct AddDeviceWizard: View {
                     ftmsScanner.stopScan()
                     step = .confirm
                 } onRescan: {
-                    ftmsScanner.scan()
+                    ftmsScanner.scan(unfiltered: AppModel.ftmsProbeEnabled())
                 }
             } else if type == .amazfit || type == .miBand {
                 // EXPERIMENTAL Huami pick list (Amazfit / Zepp / Mi Band).
@@ -1231,7 +1235,9 @@ struct AddDeviceWizard: View {
     private func startScan(for type: DeviceType) {
         switch type {
         case .whoop4, .whoop5mg: model.presentWhoopScan(model: type.whoopModel ?? .whoop4)
-        case .gymEquipment:      ftmsScanner.scan()
+        // A probe scan is unfiltered, because a machine that SERVES FTMS need not ADVERTISE it and the
+        // filtered scan can never reach one. Same resolver as the probe log detail.
+        case .gymEquipment:      ftmsScanner.scan(unfiltered: AppModel.ftmsProbeEnabled())
         case .amazfit, .miBand:  huamiScanner.scan()
         case .oura:              ouraScanner.scan()
         // Heart-rate strap AND Garmin both use the standard 0x180D scanner (Garmin Broadcast HR).
@@ -1561,8 +1567,13 @@ private struct FTMSPickList: View {
                 SearchingCard()
             } else {
                 ForEach(scanner.discovered.sorted { $0.rssi > $1.rssi }) { machine in
+                    // A probe scan is unfiltered, so the list can hold devices that are not fitness
+                    // machines. Saying so is the one thing worth knowing about them, and the opposite of
+                    // what the default subtitle would claim.
                     DiscoveredRow(name: machine.name,
-                                  subtitle: String(localized: "Gym equipment"),
+                                  subtitle: machine.advertisesFtms
+                                      ? String(localized: "Gym equipment")
+                                      : String(localized: "Not advertising fitness data"),
                                   rssi: machine.rssi) {
                         onSelect(machine)
                     }

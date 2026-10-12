@@ -746,7 +746,7 @@ interface WhoopDao : DeviceRegistryDao {
      * `WhoopStore.streamPresence`.
      */
     data class StreamPresence(
-        val hr: Boolean, val rr: Boolean, val gravity: Boolean, val steps: Boolean,
+        val hr: Boolean, val rr: Boolean, val gravity: Boolean, val steps: Boolean, val sleepState: Boolean,
     )
 
     @Query(
@@ -754,7 +754,8 @@ interface WhoopDao : DeviceRegistryDao {
             "EXISTS(SELECT 1 FROM hrSample WHERE deviceId = :deviceId AND ts >= :from AND ts <= :to) AS hr, " +
             "EXISTS(SELECT 1 FROM rrInterval WHERE deviceId = :deviceId AND ts >= :from AND ts <= :to) AS rr, " +
             "EXISTS(SELECT 1 FROM gravitySample WHERE deviceId = :deviceId AND ts >= :from AND ts <= :to) AS gravity, " +
-            "EXISTS(SELECT 1 FROM stepSample WHERE deviceId = :deviceId AND ts >= :from AND ts <= :to) AS steps"
+            "EXISTS(SELECT 1 FROM stepSample WHERE deviceId = :deviceId AND ts >= :from AND ts <= :to) AS steps, " +
+            "EXISTS(SELECT 1 FROM sleepStateSample WHERE deviceId = :deviceId AND ts >= :from AND ts <= :to) AS sleepState"
     )
     suspend fun streamPresence(deviceId: String, from: Long, to: Long): StreamPresence
 

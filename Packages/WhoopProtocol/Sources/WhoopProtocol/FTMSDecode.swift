@@ -320,3 +320,99 @@ public enum StandardBattery {
         return min(100, Int(first))
     }
 }
+
+// MARK: - Read-only probe formatting
+
+/// Pure formatting for the FTMS **capability probe** — the read-only diagnostic that answers "does this
+/// machine actually serve treadmill data, and which fields does it populate?" before anything is built on
+/// top of it. Many iFit-based machines (NordicTrack, ProForm) advertise Heart Rate *receive* without
+/// exposing 0x1826 outbound at all, or expose it with the data characteristic unimplemented — and a
+/// working HR broadcast to the machine is no evidence either way.
+///
+/// Every string here asserts only what the bytes show: the characteristic, the frame length, the raw
+/// flags word, and which of the fields NOOP surfaces the decode actually populated. It does NOT claim the
+/// machine "supports" or "lacks" a metric in general — one frame is one frame, and a machine may set
+/// different flag bits when it is idle than when it is moving.
+public enum FTMSProbe {
+
+    /// Byte width of the leading flags field. Cross Trainer Data carries a 24-bit flags word; the other
+    /// three carry 16-bit.
+    public static func flagsWidth(_ kind: FTMSMachineKind) -> Int {
+        kind == .crossTrainer ? 3 : 2
+    }
+
+    /// The raw little-endian flags word at the head of a machine-data frame, or nil if the UUID is not
+    /// one of the four machine-data characteristics or the frame is too short to hold its flags field.
+    public static func flags(uuid16: String, _ data: [UInt8]) -> Int? {
+        guard let kind = kind(forUUID16: uuid16) else { return nil }
+        let width = flagsWidth(kind)
+        guard data.count >= width else { return nil }
+        var value = 0
+        for i in 0..<width { value |= Int(data[i]) << (8 * i) }
+        return value
+    }
+
+    /// One log line describing a single machine-data frame: the characteristic, its byte length, the raw
+    /// flags word, and which surfaced fields the decode populated versus left empty.
+    ///
+    /// Returns nil when there is nothing attributable to say — an unknown characteristic, or a frame too
+    /// short to read its own flags field.
+    public static func frameSummary(uuid16: String, _ data: [UInt8]) -> String? {
+        guard let kind = kind(forUUID16: uuid16),
+              let flags = flags(uuid16: uuid16, data),
+              let reading = FTMSDecode.decode(uuid16: uuid16, data) else { return nil }
+        let width = flagsWidth(kind)
+        let hex = String(format: "0x%0\(width * 2)X", flags)
+        var present: [String] = []
+        var empty: [String] = []
+        for (label, carried) in fieldPresence(reading) {
+            if carried { present.append(label) } else { empty.append(label) }
+        }
+        let presentPart = present.isEmpty ? "no fields decoded" : "decoded: " + present.joined(separator: ", ")
+        let emptyPart = empty.isEmpty ? "" : " | not in frame: " + empty.joined(separator: ", ")
+        return "\(kind.characteristicUUID16) \(data.count)B flags=\(hex) \(presentPart)\(emptyPart)"
+    }
+
+    /// The fields NOOP surfaces, in a fixed order, each paired with whether this reading carried it.
+    /// Fixed order so two log lines (or the two platforms) are directly comparable.
+    static func fieldPresence(_ reading: FTMSReading) -> [(String, Bool)] {
+        [
+            ("speed", reading.speedKmh != nil),
+            ("cadence", reading.cadence != nil),
+            ("power", reading.powerWatts != nil),
+            ("distance", reading.distanceM != nil),
+            ("energy", reading.totalEnergyKcal != nil),
+            ("HR", reading.heartRate != nil),
+            ("elapsed", reading.elapsedTimeSec != nil),
+        ]
+    }
+
+    /// A GATT service/characteristic UUID rendered for a log line: the 16-bit short form ("0x1826") when
+    /// the UUID sits on the Bluetooth Base UUID, and otherwise the full 128-bit string UNCHANGED.
+    ///
+    /// A vendor-proprietary UUID is never abbreviated or dropped, because on a machine that serves no
+    /// standard fitness service the proprietary ones ARE the finding — abbreviating them to a shared
+    /// prefix would make two different vendor services print identically.
+    public static func shortLabel(_ uuid: String) -> String {
+        let lower = uuid.lowercased()
+        if lower.count == 36,
+           lower.hasPrefix("0000"),
+           lower.hasSuffix("-0000-1000-8000-00805f9b34fb") {
+            let start = lower.index(lower.startIndex, offsetBy: 4)
+            let end = lower.index(lower.startIndex, offsetBy: 8)
+            return "0x" + lower[start..<end].uppercased()
+        }
+        return uuid
+    }
+
+    /// The machine kind for a 16-bit characteristic UUID short form (case-insensitive).
+    public static func kind(forUUID16 uuid16: String) -> FTMSMachineKind? {
+        switch uuid16.uppercased() {
+        case "2ACD": return .treadmill
+        case "2AD2": return .indoorBike
+        case "2AD1": return .rower
+        case "2ACE": return .crossTrainer
+        default:     return nil
+        }
+    }
+}

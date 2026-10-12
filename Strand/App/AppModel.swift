@@ -2116,6 +2116,15 @@ final class AppModel: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: Self.polarDebugLoggingKey) }
     }
 
+    /// Whether the FTMS capability probe is enabled (Test Centre Sources or Connection domain).
+    ///
+    /// The ONE resolver, twin of Android `AppViewModel.ftmsProbeEnabled()`: the scan breadth, the
+    /// per-connect log detail and anything added later must not be able to disagree about whether a probe
+    /// is running. Read live, so toggling the domain takes effect on the next scan without a restart.
+    nonisolated static func ftmsProbeEnabled() -> Bool {
+        TestCentre.active(.sources) || TestCentre.active(.connection)
+    }
+
     /// #1284 residual 3 (EXPERIMENTAL, default OFF): generation-side 0x49-onset keying for Oura sleep. When
     /// on, an Oura hypnogram persist keys its startTs on the rounded 0x49 onset (the stable per-night anchor)
     /// and a completeness guard suppresses/replaces a duplicate re-serve BEFORE it is banked — closing the

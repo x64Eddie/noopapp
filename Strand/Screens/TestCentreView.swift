@@ -81,6 +81,13 @@ struct TestCentreView: View {
     @State private var userInfoRawHex = ""
     @State private var showUserInfoConfirm = false
 
+    // BRA-10: wake-evidence diagnostic. Two DatePickers for the interval; result lines displayed below.
+    @State private var wakeEvidenceStart = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+    @State private var wakeEvidenceEnd = Date()
+    @State private var wakeEvidenceLines: [String] = []
+    @State private var wakeEvidenceRunning = false
+    @State private var wakeEvidenceError: String?
+
     /// The value bytes the current selection would send, or nil when the entry is not usable yet.
     /// Raw-hex mode is how the date-of-birth (age) path is probed: there is no age setter and no capture
     /// pins the 9-byte type-5 layout, so a guess must be typed deliberately, never offered as "Age".
@@ -397,11 +404,122 @@ struct TestCentreView: View {
                     }
                     .tint(StrandPalette.accent)
                 }
+
+                // BRA-10: wake-evidence readout (gated on the .sleep test mode).
+                if TestCentre.active(.sleep) {
+                    Divider().overlay(StrandPalette.hairline)
+                    wakeEvidenceSection
+                }
             }
         }
     }
 
     // MARK: - Section 2b: Oura (consolidated; only when an Oura ring is paired)
+
+    // MARK: - BRA-10: Wake-evidence diagnostic
+
+    @ViewBuilder private var wakeEvidenceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Wake-evidence readout").font(StrandFont.body)
+            Text("Pick a time window for a night, then compare reported awakenings against stored streams. Each epoch line shows which channels were actually present for this night (WHOOP 4.0 has no band sleep_state and sparse motion).")
+                .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            DatePicker("Start", selection: $wakeEvidenceStart)
+                .datePickerStyle(.compact).font(StrandFont.body)
+            DatePicker("End", selection: $wakeEvidenceEnd)
+                .datePickerStyle(.compact).font(StrandFont.body)
+
+            NoopButton("Run", systemImage: "play.fill", kind: .secondary) {
+                runWakeEvidence()
+            }
+            .disabled(wakeEvidenceRunning)
+
+            if let error = wakeEvidenceError {
+                Text(error)
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.statusWarning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !wakeEvidenceLines.isEmpty {
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(wakeEvidenceLines, id: \.self) { line in
+                            Text(line)
+                                .font(StrandFont.mono)
+                                .foregroundStyle(StrandPalette.textSecondary)
+                        }
+                    }
+                }
+                .frame(maxHeight: 300)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(StrandPalette.hairline))
+                .padding(.top, 4)
+
+                NoopButton("Copy", systemImage: "doc.on.doc", kind: .secondary) {
+                    PlatformPasteboard.copy(wakeEvidenceLines.joined(separator: "\n"))
+                }
+            }
+        }
+    }
+
+    private func runWakeEvidence() {
+        guard TestCentre.active(.sleep) else { return }
+        wakeEvidenceRunning = true
+        wakeEvidenceError = nil
+        let startTs = Int(wakeEvidenceStart.timeIntervalSince1970)
+        let endTs = Int(wakeEvidenceEnd.timeIntervalSince1970)
+        guard startTs < endTs else {
+            wakeEvidenceError = "Start must be before end."
+            wakeEvidenceRunning = false
+            return
+        }
+        Task {
+            let lines: [String]
+            do {
+                guard let store = await model.repo.storeHandle() else {
+                    wakeEvidenceError = "Store not available."
+                    wakeEvidenceRunning = false
+                    return
+                }
+                let deviceId = model.repo.deviceId
+                let presence = try await store.streamPresence(deviceId: deviceId, from: startTs, to: endTs)
+                let wakePresence = WakeEvidencePresence(
+                    hr: presence.hr, rr: presence.rr,
+                    gravity: presence.gravity, steps: presence.steps,
+                    sleepState: presence.sleepState)
+
+                let hrSamples: [HRSample] = presence.hr
+                    ? (try? await store.hrSamples(deviceId: deviceId, from: startTs, to: endTs, limit: 200_000)) ?? []
+                    : []
+                let rrSamples: [RRInterval] = presence.rr
+                    ? (try? await store.rrIntervals(deviceId: deviceId, from: startTs, to: endTs, limit: 200_000)) ?? []
+                    : []
+                let gravSamples: [GravitySample] = presence.gravity
+                    ? (try? await store.gravitySamples(deviceId: deviceId, from: startTs, to: endTs, limit: 200_000)) ?? []
+                    : []
+                let sleepStateSamples: [SleepStateSample] = presence.sleepState
+                    ? (try? await store.sleepStateSamples(deviceId: deviceId, from: startTs, to: endTs, limit: 200_000)) ?? []
+                    : []
+
+                let registryModel = model.deviceRegistry?.devices.first { $0.id == deviceId }?.model
+                let family = DeviceFamily.forRegistryModel(registryModel)
+
+                lines = StrandAnalytics.wakeEvidenceLines(
+                    start: startTs, end: endTs,
+                    family: family,
+                    presence: wakePresence,
+                    hr: hrSamples, rr: rrSamples,
+                    grav: gravSamples,
+                    sleepState: sleepStateSamples)
+            } catch {
+                wakeEvidenceError = error.localizedDescription
+                wakeEvidenceRunning = false
+                return
+            }
+            wakeEvidenceLines = lines
+            wakeEvidenceRunning = false
+        }
+    }
 
     @ViewBuilder private var ouraCard: some View {
         NoopCard {
