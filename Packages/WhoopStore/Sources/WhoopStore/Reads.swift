@@ -638,9 +638,10 @@ extension WhoopStore {
     /// of other lines. Diagnostics-export only, like `rawSampleCountsByDevice`. Kotlin twin:
     /// `WhoopDao.streamPresence`.
     public struct StreamPresence: Sendable, Equatable {
-        public let hr: Bool, rr: Bool, gravity: Bool, steps: Bool
-        public init(hr: Bool, rr: Bool, gravity: Bool, steps: Bool) {
+        public let hr: Bool, rr: Bool, gravity: Bool, steps: Bool, sleepState: Bool
+        public init(hr: Bool, rr: Bool, gravity: Bool, steps: Bool, sleepState: Bool) {
             self.hr = hr; self.rr = rr; self.gravity = gravity; self.steps = steps
+            self.sleepState = sleepState
         }
     }
 
@@ -651,12 +652,15 @@ extension WhoopStore {
                   EXISTS(SELECT 1 FROM hrSample WHERE deviceId = ? AND ts >= ? AND ts <= ?) AS hr,
                   EXISTS(SELECT 1 FROM rrInterval WHERE deviceId = ? AND ts >= ? AND ts <= ?) AS rr,
                   EXISTS(SELECT 1 FROM gravitySample WHERE deviceId = ? AND ts >= ? AND ts <= ?) AS gravity,
-                  EXISTS(SELECT 1 FROM stepSample WHERE deviceId = ? AND ts >= ? AND ts <= ?) AS steps
+                  EXISTS(SELECT 1 FROM stepSample WHERE deviceId = ? AND ts >= ? AND ts <= ?) AS steps,
+                  EXISTS(SELECT 1 FROM sleepStateSample WHERE deviceId = ? AND ts >= ? AND ts <= ?) AS sleepState
                 """, arguments: [deviceId, from, to, deviceId, from, to,
-                                 deviceId, from, to, deviceId, from, to])
+                                 deviceId, from, to, deviceId, from, to,
+                                 deviceId, from, to])
             return StreamPresence(
                 hr: (row?["hr"] ?? 0) != 0, rr: (row?["rr"] ?? 0) != 0,
-                gravity: (row?["gravity"] ?? 0) != 0, steps: (row?["steps"] ?? 0) != 0)
+                gravity: (row?["gravity"] ?? 0) != 0, steps: (row?["steps"] ?? 0) != 0,
+                sleepState: (row?["sleepState"] ?? 0) != 0)
         }
     }
 
