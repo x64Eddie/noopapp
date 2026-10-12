@@ -135,6 +135,11 @@ struct StageDetailView: View {
             if repo.activeDeviceIsOura {
                 ouraRawStagesNote
             }
+            // Wake-detection limitation: wrist devices under-detect brief in-bed awakenings (30.8%
+            // wake sensitivity against PSG, bias −4.92 pp, PhysioNet sleep-accel 31 subjects /
+            // 26,773 epochs). Always-on so a user reading a low disturbance count sees the
+            // measurement limitation named beside the figure. Twin of SleepView.wakeDetectionNote.
+            wakeDetectionNote
         }
         // WHOOP top-chart data (ryanAtriumAi #988): 1-min sleeping-HR buckets for THIS night, reloaded
         // only when the displayed night changes (same `.task(id:)` pattern the other per-night loads use).
@@ -334,6 +339,26 @@ struct StageDetailView: View {
         .padding(.horizontal, 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Raw on-device stages. This split is the ring's raw on-device classification read over Bluetooth, not the adjusted stages the Oura app shows. Expect more awake and less deep or REM here than in the Oura app for the same night.")
+    }
+
+    /// Honest note on wake-detection sensitivity: wrist devices under-call brief in-bed awakenings, so a
+    /// 0-disturbance night is the expected measurement floor, not a certified silent night. Measured wake
+    /// sensitivity is 30.8% (bias −4.92 pp, PhysioNet sleep-accel, 31 subjects / 26,773 epochs). WHOOP 4.0
+    /// has no band sleep_state stream, so staging relies on cardiorespiratory signals alone. Always-on so a
+    /// user reading a low disturbance count sees the measurement limitation named beside the figure.
+    /// Light badge (no warning tint) — this is a measured characteristic of the whole class of wrist
+    /// devices, not a fault in this one night. Matches SleepView.wakeDetectionNote word for word.
+    private var wakeDetectionNote: some View {
+        HStack(alignment: .top, spacing: 8) {
+            SourceBadge("On-device", tint: StrandPalette.restColor)
+            Text("Brief in-bed awakenings are frequently missed by all wrist wearables — NOOP's stager detects 30.8% of wake epochs against polysomnography (bias −4.92 pp, PhysioNet sleep-accel, 31 subjects / 26,773 epochs). WHOOP 4.0 lacks the band sleep_state signal, so staging uses cardiorespiratory data alone; the measurement floor is higher. A 0-disturbance night is the expected floor, not a certified silent night. The figures are kept as-is.")
+                .font(StrandFont.footnote)
+                .foregroundStyle(StrandPalette.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("On-device. Brief in-bed awakenings are frequently missed by all wrist wearables — NOOP's stager detects 30.8 percent of wake epochs against polysomnography. A night with no disturbances is the expected measurement floor, not a certified silent night.")
     }
 
     /// Full-width proportional stacked stage bar (fallback when no intervals).
