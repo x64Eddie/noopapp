@@ -323,6 +323,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
 
     /**
+     * Whether the FTMS capability probe is enabled (Test Centre Sources or Connection domain).
+     *
+     * Exposed here rather than read in the wizard so the probe has ONE resolver: the scan breadth, the
+     * per-connect log detail and anything added later must not be able to disagree about whether a probe
+     * is running. Read live, so toggling the domain takes effect on the next scan without a restart.
+     */
+    fun ftmsProbeEnabled(): Boolean {
+        val tc = com.noop.testcentre.TestCentre.from(appContext)
+        return tc.active(com.noop.testcentre.TestDomain.SOURCES) ||
+            tc.active(com.noop.testcentre.TestDomain.CONNECTION)
+    }
+
+    /**
      * A DISCOVERY-ONLY [com.noop.ble.FtmsSource] for the Add-gym-equipment wizard. Runs its OWN scan and
      * never connects here — the [SourceCoordinator] owns connection once an FTMS machine becomes active.
      * The sinks are no-ops; the wizard only reads its `discovered` / `scanning` StateFlows. Mirrors the
@@ -335,6 +348,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // Wizard scan diagnostics → the SAME exported strap log the active path uses (issue #421).
             // The source self-prefixes "FTMS: "; [externalLog] redacts addresses. Statuses / counts only.
             log = { ble.externalLog(it) },
+            // The wizard never connects, so this only affects the lines a probe SCAN emits. Same resolver
+            // as the scan breadth, so the two cannot disagree about whether a probe is running.
+            probeDetail = { ftmsProbeEnabled() },
         )
 
     /**

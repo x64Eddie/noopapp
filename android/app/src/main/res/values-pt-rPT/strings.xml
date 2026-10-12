@@ -197,6 +197,7 @@
     <string name="l10n_add_device_wizard_not_showing_up_make_sure_you_60a8a61b">Não aparece? Certifique-se de que reinicia o anel na aplicação Oura, força o encerramento e toca em Rescan. Um anel que ainda pertence à Oura não será aqui listado.</string>
     <string name="l10n_add_device_wizard_one_phone_at_a_time_cff4ff44">Um telefone de cada vez</string>
     <string name="l10n_add_device_wizard_oura_ring_e3431536">Anel Oura</string>
+    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">Não anuncia dados de fitness</string>
     <string name="l10n_add_device_wizard_rescan_84661f6a">Digitalizar novamente</string>
     <string name="l10n_add_device_wizard_ring_key_32_hex_characters_28cb7e4a">Chave de anel, 32 caracteres hexadecimais</string>
     <string name="l10n_add_device_wizard_scan_28cba55d">Digitalizar</string>

@@ -214,6 +214,7 @@
     <string name="l10n_add_device_wizard_not_showing_up_make_sure_you_60a8a61b">Taucht der Ring nicht auf? Stelle sicher, dass du den Ring in der Oura-App zurückgesetzt und sie vollständig beendet hast, dann tippe auf „Neu scannen“. Ein Ring, der noch Oura gehört, erscheint hier nicht.</string>
     <string name="l10n_add_device_wizard_one_phone_at_a_time_cff4ff44">Ein Telefon nach dem anderen</string>
     <string name="l10n_add_device_wizard_oura_ring_e3431536">Oura-Ring</string>
+    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">Sendet keine Fitnessdaten</string>
     <string name="l10n_add_device_wizard_rescan_84661f6a">Neu scannen</string>
     <string name="l10n_add_device_wizard_ring_key_32_hex_characters_28cb7e4a">Ringschlüssel, 32 Hexzeichen</string>
     <string name="l10n_add_device_wizard_scan_28cba55d">Suchen</string>

@@ -275,6 +275,7 @@
     <string name="l10n_add_device_wizard_not_showing_up_make_sure_you_60a8a61b">Не появляется? Убедитесь, что вы сбросили кольцо в приложении Oura и принудительно закрыли его, затем нажмите «Повторить поиск». Кольцо, которым всё ещё владеет Oura, здесь не отобразится.</string>
     <string name="l10n_add_device_wizard_one_phone_at_a_time_cff4ff44">По одному телефону за раз</string>
     <string name="l10n_add_device_wizard_oura_ring_e3431536">Кольцо Oura</string>
+    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">Не передаёт фитнес-данные</string>
     <string name="l10n_add_device_wizard_rescan_84661f6a">Пересканировать</string>
     <string name="l10n_add_device_wizard_ring_key_32_hex_characters_28cb7e4a">Ключ кольца, 32 шестнадцатеричных символа</string>
     <string name="l10n_add_device_wizard_scan_28cba55d">Сканировать</string>

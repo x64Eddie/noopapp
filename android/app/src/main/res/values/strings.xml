@@ -312,6 +312,7 @@
     <string name="l10n_add_device_wizard_not_showing_up_make_sure_you_60a8a61b">Not showing up? Make sure you reset the ring in the Oura app and force-quit it, then tap Rescan. A ring still owned by Oura will not list here.</string>
     <string name="l10n_add_device_wizard_one_phone_at_a_time_cff4ff44">One phone at a time</string>
     <string name="l10n_add_device_wizard_oura_ring_e3431536">Oura ring</string>
+    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">Not advertising fitness data</string>
     <string name="l10n_add_device_wizard_rescan_84661f6a">Rescan</string>
     <string name="l10n_add_device_wizard_ring_key_32_hex_characters_28cb7e4a">Ring key, 32 hex characters</string>
     <string name="l10n_add_device_wizard_scan_28cba55d">Scan</string>

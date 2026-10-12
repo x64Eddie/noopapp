@@ -31,6 +31,7 @@
     <string name="l10n_add_device_wizard_not_showing_up_make_sure_you_60a8a61b">¿No aparece? Asegúrate de restablecer el anillo en la app de Oura y forzar su cierre, luego toca Reescanear. Un anillo que aún pertenezca a Oura no aparecerá aquí.</string>
     <string name="l10n_add_device_wizard_one_phone_at_a_time_cff4ff44">Un teléfono a la vez</string>
     <string name="l10n_add_device_wizard_oura_ring_e3431536">Anillo Oura</string>
+    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">No anuncia datos de fitness</string>
     <string name="l10n_add_device_wizard_rescan_84661f6a">Volver a escanear</string>
     <string name="l10n_add_device_wizard_ring_key_32_hex_characters_28cb7e4a">Llave de anillo, 32 caracteres hex</string>
     <string name="l10n_add_device_wizard_scan_28cba55d">Escanear</string>

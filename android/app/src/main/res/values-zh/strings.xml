@@ -194,6 +194,7 @@
     <string name="l10n_add_device_wizard_not_showing_up_make_sure_you_60a8a61b">找不到设备？请确保您已在官方 App 中重置了该戒指，并强行退出了官方 App，然后重试。</string>
     <string name="l10n_add_device_wizard_one_phone_at_a_time_cff4ff44">一次只能连接一台手机</string>
     <string name="l10n_add_device_wizard_oura_ring_e3431536">Oura 戒指</string>
+    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">未广播健身数据</string>
     <string name="l10n_add_device_wizard_rescan_84661f6a">重新扫描</string>
     <string name="l10n_add_device_wizard_ring_key_32_hex_characters_28cb7e4a">戒指密钥 (32位十六进制字符)</string>
     <string name="l10n_add_device_wizard_scan_28cba55d">扫描</string>

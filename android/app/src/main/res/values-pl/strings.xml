@@ -197,6 +197,7 @@
     <string name="l10n_add_device_wizard_not_showing_up_make_sure_you_60a8a61b">Nie pojawiasz się? Pamiętaj, aby zresetować pierścień w aplikacji Oura i wymusić jego zamknięcie, a następnie stuknij opcję Skanuj ponownie. Pierścień nadal będący własnością Oura nie będzie tutaj wymieniony.</string>
     <string name="l10n_add_device_wizard_one_phone_at_a_time_cff4ff44">Jeden telefon na raz</string>
     <string name="l10n_add_device_wizard_oura_ring_e3431536">Pierścień Oura</string>
+    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">Nie rozgłasza danych fitness</string>
     <string name="l10n_add_device_wizard_rescan_84661f6a">Skanuj ponownie</string>
     <string name="l10n_add_device_wizard_ring_key_32_hex_characters_28cb7e4a">Klucz pierścieniowy, 32 znaki szesnastkowe</string>
     <string name="l10n_add_device_wizard_scan_28cba55d">Skandować</string>
