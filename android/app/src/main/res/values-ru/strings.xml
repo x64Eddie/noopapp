@@ -835,6 +835,7 @@
     <string name="l10n_sleep_screen_asleep_duration_3638413f">Длительность сна</string>
     <string name="l10n_sleep_screen_asleep_last_night_b969b068">во сне прошлой ночью</string>
     <string name="l10n_sleep_screen_bedtime_wake_time_b2a22c32">Время отхода ко сну и подъёма</string>
+    <string name="l10n_sleep_screen_brief_in_bed_awakenings_are_c8f0a7e8">Короткие пробуждения в постели часто пропускают все наручные носимые устройства — стейджер NOOP распознаёт 30,8% эпох бодрствования относительно полисомнографии (смещение −4,92 п.п., PhysioNet sleep-accel, 31 участник / 26 773 эпохи). У WHOOP 4.0 нет сигнала sleep_state с ремешка, поэтому стадии определяются только по кардиореспираторным данным; порог измерения выше. Ночь с нулём пробуждений — это ожидаемый порог, а не подтверждённая спокойная ночь. Значения оставлены без изменений.</string>
     <string name="l10n_sleep_screen_consistency_0ea7b95e">Регулярность</string>
     <string name="l10n_sleep_screen_delete_this_nap_1adf0a3f">Удалить этот дневной сон</string>
     <string name="l10n_sleep_screen_fell_asleep_at_asleep_woke_at_80465b2d">Уснули в %1$s, проснулись в %2$s</string>
@@ -855,6 +856,7 @@
     <string name="l10n_sleep_screen_no_nights_with_sleep_data_yet_fa71b6b3">Ночей с данными о сне пока нет. История будет пополняться по мере того, как вы носите браслет во время сна.</string>
     <string name="l10n_sleep_screen_not_enough_history_in_this_range_7e2fd640">Недостаточно истории в этом диапазоне. Попробуйте 3М, 6М или ВСЁ.</string>
     <string name="l10n_sleep_screen_not_enough_history_yet_0e2f93b6">Пока недостаточно истории</string>
+    <string name="l10n_sleep_screen_on_device_1b4ae650">На устройстве</string>
     <string name="l10n_sleep_screen_per_night_sleep_balance_ledger_nightcount_f339d0ab">Баланс сна по ночам: %1$s ночей, итог %2$s</string>
     <string name="l10n_sleep_screen_sleep_consistency_nightly_bed_and_wake_14526f89">График постоянства сна: время отхода ко сну и подъёма по ночам</string>
     <string name="l10n_sleep_screen_sleep_debt_3aec7d9c">Недосып</string>

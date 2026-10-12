@@ -31,7 +31,7 @@
     <string name="l10n_add_device_wizard_not_showing_up_make_sure_you_60a8a61b">Elle n\'apparaît pas ? Assurez-vous d\'avoir réinitialisé la bague dans l\'app Oura et de l\'avoir forcée à quitter, puis touchez Nouveau scan. Une bague toujours détenue par Oura n\'apparaîtra pas ici.</string>
     <string name="l10n_add_device_wizard_one_phone_at_a_time_cff4ff44">Un téléphone à la fois</string>
     <string name="l10n_add_device_wizard_oura_ring_e3431536">Bague Oura</string>
-    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">N'annonce pas de données de fitness</string>
+    <string name="l10n_add_device_wizard_not_advertising_fitness_data_dee65fe4">N\'annonce pas de données de fitness</string>
     <string name="l10n_add_device_wizard_rescan_84661f6a">Nouveau scan</string>
     <string name="l10n_add_device_wizard_ring_key_32_hex_characters_28cb7e4a">Clé de son, 32 caractères hex</string>
     <string name="l10n_add_device_wizard_scan_28cba55d">Scanner</string>
