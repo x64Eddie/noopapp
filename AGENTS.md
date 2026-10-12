@@ -286,3 +286,9 @@ Swift, you MUST build the app yourself: `xcodebuild … build` locally, or run `
 
 When in doubt, open an issue to coordinate first, and prefer the smallest change that's correct and
 covered by a test that runs without a strap.
+
+## Agent workflow (Paperclip, coding-vm)
+
+- **Never push to `main`.** Create a branch named `agent/<issue-id>-<short-slug>`, push it, and open a pull request with `gh pr create`. Stop after opening the PR; do not merge it.
+- **Dev servers:** if you need a web server or preview, use port **3001** and bind to all interfaces (e.g. `-H 0.0.0.0 -p 3001`) so it is reachable on the tailnet at `http://coding-vm.tail1e92db.ts.net:3001`. Do not use ports outside 3000-3010, and do not use another project's port.
+- **Network:** you run in a container on `coding-vm`. Do not scan or probe the LAN or tailnet, and do not touch services you were not asked to work on.
