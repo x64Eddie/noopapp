@@ -25,11 +25,18 @@ public final class FTMSSource: NSObject, ObservableObject {
 
     // MARK: - Public model
 
-    /// An FTMS machine seen during a scan.
+    /// A device seen during a scan.
+    ///
+    /// `advertisesFtms` records whether 0x1826 was in THIS advertisement, which is the only thing a scan
+    /// can establish. The filtered scan sets it for everything it returns, by construction. A probe scan is
+    /// unfiltered and so also surfaces devices that are not fitness machines at all, and devices that serve
+    /// FTMS without advertising it — telling those two apart needs a connection, not a scan, so nothing here
+    /// may be labelled a machine on scan evidence alone.
     public struct DiscoveredMachine: Identifiable, Equatable {
         public let id: UUID
         public let name: String
         public let rssi: Int
+        public var advertisesFtms: Bool = true
     }
 
     /// Machines discovered during the current scan.
@@ -61,6 +68,26 @@ public final class FTMSSource: NSObject, ObservableObject {
         machineCharKinds.first(where: { $0.0 == uuid })?.1
     }
 
+    /// A GATT UUID rendered for a probe log line, through the ONE cross-platform renderer
+    /// (`FTMSProbe.shortLabel`, pinned by `FTMSProbeTests` and its Kotlin twin) so the Apple and Android
+    /// logs cannot disagree about how a service is spelled.
+    ///
+    /// `CBUUID.uuidString` already abbreviates a Bluetooth-base UUID to its 16- or 32-bit short form, which
+    /// `shortLabel` cannot recognise, so the short forms are expanded back to the canonical 128-bit string
+    /// before being handed over. A vendor UUID passes through untouched — on a machine that serves no
+    /// standard fitness service the proprietary UUIDs ARE the finding.
+    private static func label(_ uuid: CBUUID) -> String {
+        let s = uuid.uuidString
+        switch s.count {
+        case 4:  return FTMSProbe.shortLabel("0000\(s)-0000-1000-8000-00805f9b34fb")
+        case 8:  return FTMSProbe.shortLabel("\(s)-0000-1000-8000-00805f9b34fb")
+        default: return FTMSProbe.shortLabel(s)
+        }
+    }
+
+    /// Cap on "frame fields changed" lines per connection — evidence, not a trace.
+    private static let maxFlagsChangeLines = 5
+
     // MARK: - Dependencies (injected — no BLEManager reference)
 
     private let live: LiveState
@@ -69,8 +96,31 @@ public final class FTMSSource: NSObject, ObservableObject {
     /// Whether to push the machine's HR into the shared `LiveState` (true for the active machine; false
     /// for the throwaway discovery-only scanner the wizard uses).
     private let feedsLive: Bool
+    /// Read live at connect: whether the per-connect PROBE readout is wanted (Test Centre Sources /
+    /// Connection domain). Gates the once-per-connect GATT inventory and the first-frame field summary —
+    /// readouts that fire on every healthy connection and so must not be always-on. It does NOT gate the
+    /// mismatch lines (0x1826 or its data characteristic missing, flags word changed), which are rare-event
+    /// evidence: they cost nothing when nothing happens and are exactly what is absent when someone reports
+    /// "my treadmill shows no data" without the Test Centre enabled. Default off, wired by the two
+    /// construction sites to `AppModel.ftmsProbeEnabled()` — the ONE resolver, shared with the scan breadth.
+    private let probeDetail: () -> Bool
 
     private var loggedFirstReading = false
+    /// True while the current scan is the unfiltered probe scan (changes what a sighting can claim).
+    private var unfilteredScan = false
+    /// The previous frame's flags word, so a CHANGE can be reported without reporting every frame.
+    private var lastFlags: Int?
+    /// Flags-change lines emitted this connection, capped so a machine toggling bits cannot flood the log.
+    private var flagsChangeLines = 0
+    /// Services whose characteristic discovery the gated inventory is still waiting on, and whether that
+    /// inventory has already been printed for this connection (it is printed once, when the last service
+    /// answers).
+    private var pendingProbeServices = 0
+    private var probeInventoryLogged = false
+    /// True only between the probe's full characteristic discovery and the one inventory line it prints.
+    /// Without it the counter's "nothing left to wait for" state — which is also its INITIAL state — would
+    /// make the gated inventory print on an ungated connection.
+    private var probeInventoryExpected = false
 
     // MARK: - CoreBluetooth state (OWN central, separate from WHOOP)
 
@@ -86,14 +136,17 @@ public final class FTMSSource: NSObject, ObservableObject {
     ///   - log: connect-lifecycle diagnostics, wired to the same strap log `BLEManager` writes to.
     ///   - onBattery: fired with the machine's battery percent (0–100) when read off 0x2A19.
     ///   - feedsLive: when false (the wizard's discovery-only scanner) the source never writes `LiveState`.
+    ///   - probeDetail: read live at connect — whether the gated per-connect probe readouts are wanted.
     public init(live: LiveState,
                 log: @escaping (String) -> Void = { _ in },
                 onBattery: @escaping (Int) -> Void = { _ in },
-                feedsLive: Bool = true) {
+                feedsLive: Bool = true,
+                probeDetail: @escaping () -> Bool = { false }) {
         self.live = live
         self.log = log
         self.onBattery = onBattery
         self.feedsLive = feedsLive
+        self.probeDetail = probeDetail
         super.init()
         self.central = CBCentralManager(delegate: self, queue: nil)
     }
@@ -101,16 +154,34 @@ public final class FTMSSource: NSObject, ObservableObject {
     // MARK: - Scanning
 
     /// Begin scanning for FTMS machines advertising the 0x1826 service.
-    public func scan() {
+    public func scan() { scan(unfiltered: false) }
+
+    /// Begin scanning for gym equipment.
+    ///
+    /// `unfiltered` drops the 0x1826 service filter, which matters because **a machine that serves FTMS
+    /// need not advertise it.** The filtered scan can only ever find equipment that puts 0x1826 in its
+    /// advertisement, so a machine whose FTMS lives behind a connection — reportedly common on iFit-based
+    /// treadmills (NordicTrack, ProForm), which advertise Heart Rate receive and audio instead — is
+    /// invisible to it and cannot be reached at all. Probing one therefore requires seeing every nearby
+    /// device and connecting to discover what it actually serves.
+    ///
+    /// The cost is noise: an unfiltered scan reports everything in radio range, so this is a Test Centre
+    /// affordance, not the default scan. Nothing is written to any device by scanning either way.
+    public func scan(unfiltered: Bool) {
         discovered.removeAll()
         seenPeripherals.removeAll()
         scanning = true
-        log("FTMS: scanning for gym equipment (0x1826)…")
+        unfilteredScan = unfiltered
+        log(unfiltered
+            ? "FTMS: probe scan — every nearby BLE device, no 0x1826 advertisement filter"
+            : "FTMS: scanning for gym equipment (0x1826)…")
         guard central.state == .poweredOn else {
             log("FTMS: Bluetooth not powered on (state=\(central.state.rawValue)) — scan deferred until ready")
             return
         }
-        central.scanForPeripherals(withServices: [Self.fitnessMachineService],
+        // An unfiltered scan must allow duplicates OFF for the same reason the filtered one does: the list
+        // is keyed by identifier, and a repeat sighting only re-renders the same row.
+        central.scanForPeripherals(withServices: unfiltered ? nil : [Self.fitnessMachineService],
                                    options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
 
@@ -156,10 +227,22 @@ public final class FTMSSource: NSObject, ObservableObject {
             central.cancelPeripheralConnection(p)
         }
         peripheral = nil
-        loggedFirstReading = false
+        resetPerConnectionProbeState()
         latest = nil
         batteryPct = nil
         if feedsLive { live.connected = false }
+    }
+
+    /// Clear everything scoped to ONE connection, so the next connection's log describes the next
+    /// connection. A stale `loggedFirstReading` would suppress the new link's first-frame line, and a stale
+    /// `lastFlags` would report a field change that was really just a different machine.
+    private func resetPerConnectionProbeState() {
+        loggedFirstReading = false
+        lastFlags = nil
+        flagsChangeLines = 0
+        pendingProbeServices = 0
+        probeInventoryLogged = false
+        probeInventoryExpected = false
     }
 
     // MARK: - Reading handling
@@ -206,7 +289,10 @@ extension FTMSSource: @preconcurrency CBCentralManagerDelegate {
                     central.connect(p, options: nil)
                 }
             case .scan:
-                central.scanForPeripherals(withServices: [Self.fitnessMachineService],
+                // Honour the breadth the deferred scan was asked for: a probe scan parked before the radio
+                // came up must not come back as the filtered scan, which cannot reach the machine it was
+                // started to find.
+                central.scanForPeripherals(withServices: unfilteredScan ? nil : [Self.fitnessMachineService],
                                            options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
             case .discover:
                 // Nothing to connect and no scan armed, because the intent was parked before the
@@ -228,12 +314,35 @@ extension FTMSSource: @preconcurrency CBCentralManagerDelegate {
                                advertisementData: [String: Any],
                                rssi RSSI: NSNumber) {
         let id = peripheral.identifier
+        let advertised = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID]) ?? []
+        // In FILTERED mode the scan's own service filter is the authority: the OS matched 0x1826 to return
+        // this sighting at all, so the flag must not be recomputed from the advertisement dictionary — a
+        // machine that advertises the UUID somewhere this dictionary does not reflect (an overflow or
+        // solicited-services field) would otherwise be labelled "not advertising fitness data" by the very
+        // scan that found it by its fitness advertisement. Only an unfiltered probe scan decides this
+        // for itself.
+        let advertisesFtms = !unfilteredScan || advertised.contains(Self.fitnessMachineService)
+        let advName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+        let named = advName ?? peripheral.name
+        // An unfiltered probe scan sees the whole room. A nameless device cannot be identified or
+        // meaningfully picked, so it is dropped rather than filling the list.
+        if unfilteredScan && named == nil { return }
         let firstSight = seenPeripherals[id] == nil
         seenPeripherals[id] = peripheral
-        let advName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
-        let name = advName ?? peripheral.name ?? "Gym Equipment"
-        if firstSight { log("FTMS: found \(LiveState.logSafeDeviceName(name)) (\(id)) rssi \(RSSI.intValue)") }
-        let machine = DiscoveredMachine(id: id, name: name, rssi: RSSI.intValue)
+        let name = named ?? "Gym Equipment"
+        if firstSight {
+            // Probe evidence: what the device PUT IN ITS ADVERTISEMENT. Absence of 0x1826 here is not
+            // absence of FTMS — only a connection can establish that.
+            let advertises = unfilteredScan
+                ? " advertises " + (advertised.isEmpty
+                    ? "no service UUIDs"
+                    : advertised.map { Self.label($0) }.joined(separator: ", "))
+                    + (advertisesFtms ? " (includes FTMS 0x1826)" : "")
+                : ""
+            log("FTMS: found \(LiveState.logSafeDeviceName(name)) (\(id)) rssi \(RSSI.intValue)\(advertises)")
+        }
+        let machine = DiscoveredMachine(id: id, name: name, rssi: RSSI.intValue,
+                                        advertisesFtms: advertisesFtms)
         if let idx = discovered.firstIndex(where: { $0.id == id }) {
             discovered[idx] = machine
         } else {
@@ -248,7 +357,12 @@ extension FTMSSource: @preconcurrency CBCentralManagerDelegate {
     public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         log("FTMS: connected — discovering services")
         peripheral.delegate = self
-        peripheral.discoverServices([Self.fitnessMachineService, Self.batteryService])
+        // Discover ALL services (nil), not just the two this source uses, matching the Android twin — which
+        // has no service filter to drop. The always-on "0x1826 NOT FOUND, it serves X" line is the whole
+        // diagnosis, and a discovery that asked only about 0x1826 and 0x180F can attribute nothing beyond
+        // the absence of those two: it would print "no services" for a treadmill serving six of them.
+        // Service discovery is a read; nothing is written to the machine either way.
+        peripheral.discoverServices(nil)
     }
 
     public func centralManager(_ central: CBCentralManager,
@@ -264,7 +378,7 @@ extension FTMSSource: @preconcurrency CBCentralManagerDelegate {
         } else {
             log("FTMS: disconnected (clean)")
         }
-        loggedFirstReading = false
+        resetPerConnectionProbeState()
         latest = nil
         batteryPct = nil
         if feedsLive { live.connected = false }
@@ -280,40 +394,101 @@ extension FTMSSource: @preconcurrency CBPeripheralDelegate {
             log("FTMS: WARNING service discovery failed — \(error.localizedDescription)")
             return
         }
-        guard let services = peripheral.services else {
-            log("FTMS: services discovered but the list was empty")
+        let services = peripheral.services ?? []
+        let ftms = services.first(where: { $0.uuid == Self.fitnessMachineService })
+        if ftms == nil {
+            // ALWAYS-ON (a mismatch, not a per-connect readout): the device answered discovery and 0x1826
+            // was not in the answer. The inventory is the whole diagnosis — it distinguishes "this is a pair
+            // of headphones" from "this treadmill really does serve only Heart Rate and audio", which is the
+            // reported shape of iFit-based equipment. Without it the log says only that nothing was found,
+            // which is the one fact that was already obvious.
+            log("FTMS: 0x1826 service NOT FOUND — no fitness machine data available from this device. "
+                + "It serves: "
+                + (services.isEmpty
+                   ? "no services (discovery returned an empty list)"
+                   : services.map { Self.label($0.uuid) }.joined(separator: ", ")))
+        }
+        if probeDetail() {
+            // A full inventory needs every service's characteristics, so ask them all and print once the
+            // last one answers (`noteProbeServiceAnswered`).
+            pendingProbeServices = services.count
+            probeInventoryLogged = false
+            probeInventoryExpected = true
+            for svc in services { peripheral.discoverCharacteristics(nil, for: svc) }
+            if services.isEmpty { noteProbeServiceAnswered(peripheral) }
             return
         }
-        for svc in services where svc.uuid == Self.fitnessMachineService {
-            log("FTMS: 0x1826 fitness machine service FOUND — discovering machine-data characteristics")
-            peripheral.discoverCharacteristics(Self.machineChars, for: svc)
+        if let ftms {
+            // Discover ALL of 0x1826's characteristics rather than the four machine-data ones: the always-on
+            // "it exposes none of the four" line below has to say what the service DOES expose, and a
+            // filtered discovery can only report that the four it asked for are absent.
+            peripheral.discoverCharacteristics(nil, for: ftms)
         }
         for svc in services where svc.uuid == Self.batteryService {
             peripheral.discoverCharacteristics([Self.batteryLevel], for: svc)
         }
-        if !services.contains(where: { $0.uuid == Self.fitnessMachineService }) {
-            log("FTMS: 0x1826 service NOT FOUND — this device isn't a fitness machine")
-        }
+    }
+
+    /// Count one service's characteristic-discovery answer towards the GATED full GATT inventory, and print
+    /// the inventory when the last one lands. Gated because it fires on every healthy connection and says
+    /// nothing new when the machine works.
+    private func noteProbeServiceAnswered(_ peripheral: CBPeripheral) {
+        guard probeInventoryExpected else { return }
+        if pendingProbeServices > 0 { pendingProbeServices -= 1 }
+        guard pendingProbeServices == 0, !probeInventoryLogged else { return }
+        probeInventoryLogged = true
+        probeInventoryExpected = false
+        let services = peripheral.services ?? []
+        let inventory = services.map { svc -> String in
+            let chars = svc.characteristics ?? []
+            let inner = chars.isEmpty ? "none" : chars.map { Self.label($0.uuid) }.joined(separator: " ")
+            return "\(Self.label(svc.uuid)) [\(inner)]"
+        }.joined(separator: "; ")
+        log("FTMS: probe — GATT inventory: \(inventory.isEmpty ? "no services" : inventory)")
     }
 
     public func peripheral(_ peripheral: CBPeripheral,
                            didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let error = error {
             log("FTMS: WARNING characteristic discovery failed — \(error.localizedDescription)")
+            // Still counted: an inventory that waits for a service that already failed never prints.
+            noteProbeServiceAnswered(peripheral)
             return
         }
-        guard let chars = service.characteristics else { return }
-        // Subscribe to whichever machine-data characteristic this machine exposes (notify-only).
-        for ch in chars {
-            guard let kind = Self.machineKind(for: ch.uuid) else { continue }
-            log("FTMS: \(kind.displayName) data characteristic found — enabling notifications")
-            peripheral.setNotifyValue(true, for: ch)
+        let chars = service.characteristics ?? []
+        // Subscribe to whichever machine-data characteristic this machine exposes (notify-only). Enabling a
+        // notification is a CCCD write — the standard, reversible GATT subscribe, undone by disconnecting;
+        // nothing here writes to the machine's control point or alters its state.
+        if service.uuid == Self.fitnessMachineService {
+            // Judged HERE, not in `didDiscoverServices`: on Apple the characteristics of 0x1826 are not
+            // known until this callback, so "the service is there but carries no machine data" is only
+            // observable once it has answered.
+            let found = chars.compactMap { ch in Self.machineKind(for: ch.uuid).map { ($0, ch) } }
+            if found.isEmpty {
+                // ALSO ALWAYS-ON, and a different fault from "0x1826 NOT FOUND": the service is there but it
+                // carries none of the four machine-data characteristics, which is what a subscription-gated
+                // or unimplemented FTMS looks like. Distinguishing the two decides whether the machine is
+                // usable at all, so neither line may be behind a toggle.
+                log("FTMS: 0x1826 FOUND but it exposes none of the four machine-data characteristics "
+                    + "(2ACD/2AD2/2AD1/2ACE) — no live metrics are available. It exposes: "
+                    + (chars.isEmpty
+                       ? "no characteristics"
+                       : chars.map { Self.label($0.uuid) }.joined(separator: ", ")))
+            } else {
+                log("FTMS: 0x1826 fitness machine service FOUND — enabling machine-data notifications")
+                for (kind, ch) in found {
+                    log("FTMS: \(kind.displayName) data characteristic found — enabling notifications")
+                    peripheral.setNotifyValue(true, for: ch)
+                }
+            }
         }
         // Battery (0x2A19): read once, subscribe if it notifies.
         for ch in chars where ch.uuid == Self.batteryLevel {
+            log("FTMS: 0x180F battery service found — reading level")
             peripheral.readValue(for: ch)
             if ch.properties.contains(.notify) { peripheral.setNotifyValue(true, for: ch) }
         }
+        noteProbeServiceAnswered(peripheral)
     }
 
     public func peripheral(_ peripheral: CBPeripheral,
@@ -330,12 +505,29 @@ extension FTMSSource: @preconcurrency CBPeripheralDelegate {
         }
         // Machine data — map the characteristic UUID to its FTMS kind (CBUUID compare, not string
         // formatting, so we don't depend on whether the OS reports the 16-bit or 128-bit form).
-        guard let kind = Self.machineKind(for: characteristic.uuid),
-              let reading = FTMSDecode.decode(uuid16: kind.characteristicUUID16, [UInt8](value)) else { return }
+        guard let kind = Self.machineKind(for: characteristic.uuid) else { return }
+        let bytes = [UInt8](value)
+        guard let reading = FTMSDecode.decode(uuid16: kind.characteristicUUID16, bytes) else { return }
+        let flags = FTMSProbe.flags(uuid16: kind.characteristicUUID16, bytes)
         if !loggedFirstReading {
             loggedFirstReading = true
             log("FTMS: receiving \(reading.kind.displayName) data — first reading\(reading.heartRate.map { " HR \($0) bpm" } ?? "")")
+            // GATED per-connect readout: which fields THIS machine's frames actually carry. The headline
+            // question the probe exists to answer, but it fires once on every healthy connection.
+            if probeDetail(), let summary = FTMSProbe.frameSummary(uuid16: kind.characteristicUUID16, bytes) {
+                log("FTMS: probe — first frame \(summary)")
+            }
+        } else if flags != lastFlags, flagsChangeLines < Self.maxFlagsChangeLines {
+            // ALWAYS-ON state transition: the machine changed which fields it populates mid-session. Rare,
+            // so it costs nothing when nothing happens, and it is what explains a metric that appears or
+            // vanishes partway through a workout. Capped in case a machine flips bits every frame.
+            flagsChangeLines += 1
+            if let summary = FTMSProbe.frameSummary(uuid16: kind.characteristicUUID16, bytes) {
+                log("FTMS: frame fields changed \(summary)"
+                    + (flagsChangeLines == Self.maxFlagsChangeLines ? " (further changes not logged)" : ""))
+            }
         }
+        lastFlags = flags
         ingest(reading)
     }
 }

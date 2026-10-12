@@ -320,7 +320,11 @@ final class SourceCoordinator: ObservableObject {
         FTMSSource(
             live: live,
             log: straplog,
-            onBattery: { [live] pct in live.setBattery(Double(pct)) })
+            onBattery: { [live] pct in live.setBattery(Double(pct)) },
+            // Read the toggle live at connect (twin of `polarDebug` above) so the per-connect FTMS probe
+            // readout follows the modes that exist for inspecting a source. Same resolver as the wizard's
+            // scan breadth, so the two cannot disagree about whether a probe is running.
+            probeDetail: { AppModel.ftmsProbeEnabled() })
     }
 
     /// Build the EXPERIMENTAL Huami source (Amazfit / Zepp / Mi Band) for `id`. HR (standard 0x180D when
