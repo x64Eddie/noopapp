@@ -630,6 +630,7 @@
     <string name="l10n_sleep_screen_asleep_duration_3638413f">Duración del sueño</string>
     <string name="l10n_sleep_screen_asleep_last_night_b969b068">dormido anoche</string>
     <string name="l10n_sleep_screen_bedtime_wake_time_b2a22c32">Hora de dormir y hora de despertar</string>
+    <string name="l10n_sleep_screen_brief_in_bed_awakenings_are_c8f0a7e8">Todos los dispositivos de muñeca omiten con frecuencia los despertares breves en la cama: el clasificador de NOOP detecta el 30,8 % de las épocas de vigilia frente a la polisomnografía (sesgo −4,92 pp, PhysioNet sleep-accel, 31 sujetos / 26.773 épocas). WHOOP 4.0 carece de la señal sleep_state de la banda, así que la clasificación se basa solo en datos cardiorrespiratorios y el umbral de medición es más alto. Una noche con cero alteraciones es el mínimo esperado, no una noche silenciosa certificada. Las cifras se mantienen tal cual.</string>
     <string name="l10n_sleep_screen_consistency_0ea7b95e">Consistencia</string>
     <string name="l10n_sleep_screen_consistencypct_roundtoint_b23a9d40">%1$s%%</string>
     <string name="l10n_sleep_screen_delete_this_nap_1adf0a3f">Eliminar esta siesta</string>
@@ -651,6 +652,7 @@
     <string name="l10n_sleep_screen_no_nights_with_sleep_data_yet_fa71b6b3">Aún no hay noches con datos de sueño. Tu registro se irá llenando a medida que duermas con la pulsera puesta.</string>
     <string name="l10n_sleep_screen_not_enough_history_in_this_range_7e2fd640">No hay suficiente historia en este rango. Prueba 3M, 6M o TODOS.</string>
     <string name="l10n_sleep_screen_not_enough_history_yet_0e2f93b6">Aún no es suficiente historia</string>
+    <string name="l10n_sleep_screen_on_device_1b4ae650">En el dispositivo</string>
     <string name="l10n_sleep_screen_per_night_sleep_balance_ledger_nightcount_f339d0ab">Equilibrio de sueño por noche: %1$s noches, net %2$s</string>
     <string name="l10n_sleep_screen_percent_2281d326">%1$s%%</string>
     <string name="l10n_sleep_screen_score_roundtoint_a2d1cc99">%1$s%%</string>

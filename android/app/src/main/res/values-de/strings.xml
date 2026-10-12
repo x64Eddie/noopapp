@@ -831,6 +831,7 @@
     <string name="l10n_sleep_screen_asleep_duration_3638413f">Schlafdauer</string>
     <string name="l10n_sleep_screen_asleep_last_night_b969b068">letzte Nacht geschlafen</string>
     <string name="l10n_sleep_screen_bedtime_wake_time_b2a22c32">Schlafenszeit und Wachzeit</string>
+    <string name="l10n_sleep_screen_brief_in_bed_awakenings_are_c8f0a7e8">Kurze Wachphasen im Bett werden von allen Handgelenk-Wearables häufig übersehen — der Stager von NOOP erkennt 30,8 % der Wach-Epochen gegenüber der Polysomnographie (Bias −4,92 PP, PhysioNet sleep-accel, 31 Probanden / 26.773 Epochen). WHOOP 4.0 fehlt das Band-Signal sleep_state, daher stuft die Analyse allein anhand kardiorespiratorischer Daten ein; die Messschwelle liegt höher. Eine Nacht mit null Störungen ist die erwartete Untergrenze, kein zertifiziert ruhiger Schlaf. Die Werte bleiben unverändert.</string>
     <string name="l10n_sleep_screen_consistency_0ea7b95e">Konsistenz</string>
     <string name="l10n_sleep_screen_consistencypct_roundtoint_b23a9d40">%1$s%%</string>
     <string name="l10n_sleep_screen_delete_this_nap_1adf0a3f">Lösche dieses Nickerchen</string>
@@ -852,6 +853,7 @@
     <string name="l10n_sleep_screen_no_nights_with_sleep_data_yet_fa71b6b3">Noch keine Nächte mit Schlafdaten. Deine Bilanz füllt sich, wenn du den Strap im Bett trägst.</string>
     <string name="l10n_sleep_screen_not_enough_history_in_this_range_7e2fd640">Nicht genug Geschichte in diesem Bereich. Versuche 3M, 6M oder ALL.</string>
     <string name="l10n_sleep_screen_not_enough_history_yet_0e2f93b6">Noch nicht genug Geschichte</string>
+    <string name="l10n_sleep_screen_on_device_1b4ae650">Auf dem Gerät</string>
     <string name="l10n_sleep_screen_per_night_sleep_balance_ledger_nightcount_f339d0ab">Schlafbalance pro Nacht: %1$s Nächte, netto %2$s</string>
     <string name="l10n_sleep_screen_percent_2281d326">%1$s%%</string>
     <string name="l10n_sleep_screen_score_roundtoint_a2d1cc99">%1$s%%</string>
