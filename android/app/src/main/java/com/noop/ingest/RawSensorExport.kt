@@ -118,10 +118,35 @@ object RawSensorExport {
             line("event", s.ts, 13 to WhoopCsvExporter.csvField(s.kind), 14 to WhoopCsvExporter.csvField(s.payloadJSON)),
         )
 
+        // Phone screen on/off/unlock (fork-only instrumentation): a timestamp and a type, as event rows.
+        val screen = com.noop.screen.ScreenStateLog.eventsBetween(from, to)
+        counts["phone_screen"] = screen.size
+        for (e in screen) rows += LineRow(e.ts, screenEventLine(e))
+
         // Stable sort by ts asc (a stream's intra-ts order is its query's secondary key).
         rows.sortBy { it.ts }
         for (r in rows) { out.write(r.line); out.write("\n") }
         return counts
+    }
+
+    /** One phone-screen event as an `event` row: the kind label in `event_kind`, no payload. */
+    internal fun screenEventLine(e: com.noop.screen.ScreenEvent): String = line("event", e.ts, 13 to e.kind.label)
+
+    /** One night's export window: noon of the previous local day to noon of [label]'s day, clamped to now. */
+    internal data class NightWindow(val label: String, val from: Long, val to: Long)
+
+    /**
+     * The last [nights] nights as local noon-to-noon windows, newest first. A night is the span a sleep sits
+     * inside, so a window never cuts one in half the way a rolling 24 h window ending at an arbitrary time can.
+     * The newest window ends at [nowSeconds] when that is before noon. Pure, so it is tested directly.
+     */
+    internal fun nightWindows(nowSeconds: Long, nights: Int, zone: java.time.ZoneId): List<NightWindow> {
+        val today = java.time.Instant.ofEpochSecond(nowSeconds).atZone(zone).toLocalDate()
+        fun noon(d: java.time.LocalDate): Long = d.atTime(12, 0).atZone(zone).toEpochSecond()
+        return (0 until nights).map { i ->
+            val day = today.minusDays(i.toLong())
+            NightWindow("night-ending-$day", noon(day.minusDays(1)), minOf(noon(day), nowSeconds))
+        }
     }
 
     /** ts + the fully-formatted CSV line for one sample (kept small so a whole day fits in memory). */
@@ -178,6 +203,44 @@ object RawSensorExport {
                 // Compact "hr 3204 · rr 812 · …" line, only non-empty streams.
                 counts.filterValues { it > 0 }.entries.joinToString(" · ") { "${it.key} ${it.value}" }
             }
+            Toast.makeText(context, summary, Toast.LENGTH_LONG).show()
+        }.onFailure {
+            Toast.makeText(context, "Couldn't export sensor data: ${it.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+    /**
+     * The last [nights] nights as one zip, one CSV per night (each the same long-format body as [export]).
+     * Split per night because [writeCsv] holds a window in memory and caps each stream, so a week in one
+     * file would be truncated. For comparing a night you remember against what the strap recorded.
+     */
+    suspend fun exportNights(context: Context, repo: WhoopRepository, deviceId: String, nights: Int = 7) {
+        runCatching {
+            val now = System.currentTimeMillis() / 1000
+            val dir = File(context.cacheDir, "logs").apply { mkdirs() }
+            val file = File(dir, "noop-raw-sensors-${nights}n.zip")
+            val totals = LinkedHashMap<String, Int>()
+            java.util.zip.ZipOutputStream(file.outputStream().buffered()).use { zip ->
+                for (w in nightWindows(now, nights, java.time.ZoneId.systemDefault())) {
+                    zip.putNextEntry(java.util.zip.ZipEntry("${w.label}.csv"))
+                    // Not closed: closing the writer would close the zip. Flushed, then the entry is closed.
+                    val out = java.io.OutputStreamWriter(zip, Charsets.UTF_8)
+                    out.append("# NOOP raw sensor export · ${w.label} · unix ${w.from}..${w.to} · long-format CSV\n")
+                    out.append("# App: ${BuildConfig.VERSION_NAME} (${BuildConfig.TIER}) · Times are UTC.\n")
+                    for ((k, v) in writeCsv(out, repo, deviceId, w.from, w.to)) totals.merge(k, v, Int::plus)
+                    out.flush()
+                    zip.closeEntry()
+                }
+            }
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "application/zip"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "NOOP raw sensor export, last $nights nights")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(send, "Export raw sensor data"))
+            val summary = totals.filterValues { it > 0 }.entries.joinToString(" · ") { "${it.key} ${it.value}" }
+                .ifEmpty { "No samples in the last $nights nights." }
             Toast.makeText(context, summary, Toast.LENGTH_LONG).show()
         }.onFailure {
             Toast.makeText(context, "Couldn't export sensor data: ${it.message}", Toast.LENGTH_LONG).show()

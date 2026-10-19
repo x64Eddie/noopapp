@@ -3282,6 +3282,22 @@ fun SettingsScreen(
                     color = Palette.textTertiary,
                 )
 
+                // Fork-only: the same export for the last seven nights as one zip, a CSV per night (noon to
+                // noon), so a night you remember can be compared with what the strap recorded.
+                NoopButton(
+                    text = "Export raw sensor data, last 7 nights (zip)",
+                    leadingIcon = Icons.Filled.Upload,
+                    kind = NoopButtonKind.Secondary,
+                    fullWidth = true,
+                    onClick = { scope.launch { RawSensorExport.exportNights(context, vm.repo, vm.activeStrapId) } },
+                )
+                Text(
+                    "One file per night, noon to noon. Phone screen on, off and unlock times are included " +
+                        "as events (timestamps only, never what was on screen).",
+                    style = NoopType.caption,
+                    color = Palette.textTertiary,
+                )
+
                 // Haptic clock (#460): buzz the current time on the strap as a sequence of buzzes. No-ops
                 // safely when disconnected, so it stays enabled regardless of connection (matches the
                 // "Share strap log" row above, which also doesn't gate on a live strap). 12/24h follows the
