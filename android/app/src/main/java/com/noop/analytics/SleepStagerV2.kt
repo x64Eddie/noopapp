@@ -192,10 +192,16 @@ object SleepStagerV2 {
      * genuinely still low-HR sleep epoch is byte-identical; only a still epoch whose ELEVATED HR was about to
      * push it awake is held. Motion (`zmvv`) and the jerk gate — which by construction cannot fire on a
      * quiescent epoch (`jerkMax ≤ floor × gateMult`) — still drive wake on any epoch that actually moved.
+     * "Quiescent" is a claim that motion was MEASURED and found still, so it requires `motionObserved`. An
+     * epoch with no gravity samples has `moveFrac == 0` and `jerkMax == 0` only because nothing was recorded;
+     * reading that as stillness let the clamp discard a raised heart rate on exactly the epochs where motion
+     * could not be checked. A WHOOP 4.0 banks gravity in short bursts: in one captured night 31 % of the 30 s
+     * epochs carried any, and a five-minute spell at a median 122 bpm inside it was staged REM. Unmeasured
+     * epochs now keep their cardiac wake evidence; only an epoch whose stillness was observed has it discarded.
      * Internal so the predicate test can call it, matching the Swift `motionQuiescent` visibility.
      */
     internal fun motionQuiescent(f: Epoch): Boolean =
-        f.moveFrac <= 0.0 && f.jerkMax <= f.jerkScale * jerkFloorGateMult
+        f.motionObserved && f.moveFrac <= 0.0 && f.jerkMax <= f.jerkScale * jerkFloorGateMult
 
     /** Weight of the RSA respiration-regularity term (regular → deep, irregular → REM). */
     private const val respWeight = 0.6
@@ -248,6 +254,11 @@ object SleepStagerV2 {
          *  back to this window-relative value when a night never sustains sleep. Only the REM-latency guard
          *  reads it — the deep term and the REM ramp stay fractions of the session, which is what they are. */
         val minutesSinceOnset: Double,
+        /** True when this epoch holds at least two gravity samples, i.e. at least one per-second jerk was
+         *  actually measured. False means [moveFrac] and [jerkMax] are zero for want of data, not because the
+         *  wrist was still. Defaulted so a caller building an epoch from a full gravity series keeps its
+         *  meaning. Swift twin: `Epoch.motionObserved`. */
+        val motionObserved: Boolean = true,
     )
 
     // ── Feature extraction ───────────────────────────────────────────────────────────────────────────
@@ -405,7 +416,8 @@ object SleepStagerV2 {
             feats.add(Epoch(
                 start = r.start, hr = r.hr, hrVar = r.hrVar, hrFlat11 = r.hrFlat11,
                 moveFrac = moves.toDouble() / r.gapSec, jerkMax = r.jerkMax, respReg = r.respReg,
-                clock = r.clock, jerkScale = jerkScale, minutesSinceOnset = r.minutes))
+                clock = r.clock, jerkScale = jerkScale, minutesSinceOnset = r.minutes,
+                motionObserved = r.jerks.isNotEmpty()))
         }
         return feats
     }

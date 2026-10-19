@@ -150,6 +150,71 @@ class MotionCorroboratedWakeTest {
         assertFalse(SleepStagerV2.motionQuiescent(moved))
     }
 
+    // ── unmeasured motion is not stillness ───────────────────────────────────────────────────────────────
+
+    @Test
+    fun unobservedMotionIsNotQuiescent() {
+        // Zero move and zero jerk because no gravity sample landed in the epoch: nothing was measured, so the
+        // epoch must not be called still.
+        val unmeasured = SleepStagerV2.Epoch(
+            start = 0, hr = 105.0, hrVar = 6.0, hrFlat11 = 6.0, moveFrac = 0.0, jerkMax = 0.0,
+            respReg = null, clock = 0.5, jerkScale = 0.001, minutesSinceOnset = 120.0, motionObserved = false)
+        assertFalse(SleepStagerV2.motionQuiescent(unmeasured))
+        // The same numbers with motion observed ARE still.
+        val observed = SleepStagerV2.Epoch(
+            start = 0, hr = 105.0, hrVar = 6.0, hrFlat11 = 6.0, moveFrac = 0.0, jerkMax = 0.0,
+            respReg = null, clock = 0.5, jerkScale = 0.001, minutesSinceOnset = 120.0, motionObserved = true)
+        assertTrue(SleepStagerV2.motionQuiescent(observed))
+    }
+
+    /** A 5 h night, low flat HR, with a 10 min arousal (HR rising to ~170 bpm) starting 16 min in, shaped like
+     *  a captured WHOOP 4.0 night. The spell either is unmeasured apart from one brief burst of movement, or has
+     *  gravity throughout proving the wrist is still. Returns the wake minutes inside the spell. Mirrors the
+     *  Swift `nightWithHeartRateSpell` fixture exactly (same truncating integer arithmetic). */
+    private fun spellWakeMinutes(gravityInSpell: Boolean): Double {
+        val start = 1_749_517_200L
+        val dur = 5 * 60 * 60
+        val spellStart = start + 16 * 60
+        val spellEnd = spellStart + 10 * 60
+        var grav = stillWithTurnovers(start, dur, everyMin = 20).filter {
+            gravityInSpell || it.ts < spellStart || it.ts >= spellEnd
+        }
+        if (!gravityInSpell) {
+            // A WHOOP 4.0 banks gravity in bursts: the spell is unmeasured except for one 20 s burst that caught
+            // real movement (as in the captured night), so the epochs around it carry no motion data.
+            grav = (grav + walkingGravity(spellStart + 7 * 60, 20)).sortedBy { it.ts }
+        }
+        val hr = (0 until dur).map { i ->
+            val ts = start + i
+            val inSpell = ts >= spellStart && ts < spellEnd
+            // An arousal: HR climbs from the sleeping floor to ~170 bpm and back, with beat-to-beat scatter.
+            val phase = (ts - spellStart).toDouble() / (spellEnd - spellStart).toDouble()
+            val spike = if (inSpell) (115.0 * sin(PI * phase)).toInt() + (i * 37) % 9 else 0
+            HrSample(deviceId = dev, ts = ts, bpm = 56 + (i / 90) % 3 + spike)
+        }
+        val segs = SleepStagerV2.stageSession(
+            start = start, end = start + dur, grav = grav, hr = hr,
+            rr = regularRR(start, dur, meanMs = 1030), resp = emptyList())
+        return segs.filter { it.stage == "wake" }.sumOf {
+            maxOf(0L, minOf(it.end, spellEnd) - maxOf(it.start, spellStart)).toDouble()
+        } / 60.0
+    }
+
+    /** With no gravity in the spell the wrist was not observed, so the raised heart rate keeps its vote. Oracle
+     *  value from the Swift twin: the whole 10 min arousal reads wake (0.5 min without `motionObserved`). */
+    @Test
+    fun heartRateSpellWithNoGravityReadsWakeV2() {
+        val w = spellWakeMinutes(gravityInSpell = false)
+        assertEquals("an unmeasured 10 min arousal must read wake (got $w min)", 10.0, w, 0.01)
+    }
+
+    /** With gravity proving the wrist is still the clamp still holds. Oracle value from the Swift twin. */
+    @Test
+    fun heartRateSpellWithObservedStillnessIsStillHeldV2() {
+        val w = spellWakeMinutes(gravityInSpell = true)
+        assertEquals("an observed-still arousal must stay held (got $w min of wake)", 0.5, w, 0.01)
+    }
+
     // ── detection level: confirmSleepWithHR motion corroboration ─────────────────────────────────────────
 
     private fun period(start: Long, durS: Int) =
