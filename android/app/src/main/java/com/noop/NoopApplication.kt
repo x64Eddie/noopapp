@@ -62,6 +62,9 @@ class NoopApplication : Application() {
         // Re-enqueue the WHOOP sync with UPDATE so an install upgraded from a build with older retry /
         // constraint settings picks the new ones up at once. Cancels it when sync is off or unconfigured.
         runCatching { com.noop.sync.WhoopSync.reschedule(this) }
+        // Phone screen on/off timestamps, kept locally as instrumentation for sleep onset (no content, no
+        // app names). See com.noop.screen.ScreenStateLog.
+        runCatching { com.noop.screen.ScreenStateLog.start(this) }
     }
 
     /** Process-wide Room-backed store. One instance shared by the UI and the background service. */
