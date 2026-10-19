@@ -140,6 +140,74 @@ final class MotionCorroboratedWakeTests: XCTestCase {
         XCTAssertFalse(SleepStagerV2.motionQuiescent(moved))
     }
 
+    // MARK: - unmeasured motion is not stillness
+
+    func testUnobservedMotionIsNotQuiescent() {
+        // Zero move and zero jerk because no gravity sample landed in the epoch: nothing was measured, so
+        // the epoch must not be called still.
+        let unmeasured = SleepStagerV2.Epoch(start: 0, hr: 105, hrVar: 6, hrFlat11: 6, moveFrac: 0.0,
+                                             jerkMax: 0.0, respReg: nil, clock: 0.5, jerkScale: 0.001,
+                                             minutesSinceOnset: 120, motionObserved: false)
+        XCTAssertFalse(SleepStagerV2.motionQuiescent(unmeasured))
+        // The same numbers with motion observed ARE still.
+        let observed = SleepStagerV2.Epoch(start: 0, hr: 105, hrVar: 6, hrFlat11: 6, moveFrac: 0.0,
+                                           jerkMax: 0.0, respReg: nil, clock: 0.5, jerkScale: 0.001,
+                                           minutesSinceOnset: 120, motionObserved: true)
+        XCTAssertTrue(SleepStagerV2.motionQuiescent(observed))
+    }
+
+    /// A 5 h night, low flat HR, with a 20 min spell averaging ~110 bpm starting 2 h in. In `spikeGravity` mode the
+    /// spell either has NO gravity at all (a WHOOP 4.0 burst gap) or has gravity proving the wrist is still.
+    private func nightWithHeartRateSpell(gravityInSpell: Bool) -> (segs: [StageSegment], spellStart: Int, spellEnd: Int) {
+        let start = 1_749_517_200
+        let dur = 5 * 60 * 60
+        let spellStart = start + 16 * 60
+        let spellEnd = spellStart + 10 * 60
+        var grav = stillWithTurnovers(start: start, durationS: dur, everyMin: 20).filter {
+            gravityInSpell || $0.ts < spellStart || $0.ts >= spellEnd
+        }
+        if !gravityInSpell {
+            // A WHOOP 4.0 banks gravity in bursts: the spell is unmeasured except for one 20 s burst that
+            // caught real movement (as in the captured night), so the epochs around it carry no motion data.
+            grav += walkingGravity(start: spellStart + 7 * 60, durationS: 20)
+            grav.sort { $0.ts < $1.ts }
+        }
+        let hr = (0..<dur).map { i -> HRSample in
+            let ts = start + i
+            let inSpell = ts >= spellStart && ts < spellEnd
+            // An arousal: HR climbs from the sleeping floor to ~170 bpm and back, with beat-to-beat scatter.
+            let phase = Double(ts - spellStart) / Double(spellEnd - spellStart)
+            let spike = inSpell ? Int(115.0 * sin(Double.pi * phase)) + (i * 37) % 9 : 0
+            return HRSample(ts: ts, bpm: 56 + (i / 90) % 3 + spike)
+        }
+        let segs = SleepStagerV2.stageSession(start: start, end: start + dur, grav: grav, hr: hr,
+                                              rr: regularRR(start: start, durationS: dur, meanMs: 1030), resp: [])
+        return (segs, spellStart, spellEnd)
+    }
+
+    private func wakeMinutes(_ segs: [StageSegment], from: Int, to: Int) -> Double {
+        segs.filter { $0.stage == "wake" }.reduce(0.0) {
+            $0 + Double(max(0, min($1.end, to) - max($1.start, from)))
+        } / 60.0
+    }
+
+    /// With no gravity in the spell the wrist was not observed, so the raised heart rate keeps its vote.
+    func testHeartRateSpellWithNoGravityReadsWake_V2() {
+        let n = nightWithHeartRateSpell(gravityInSpell: false)
+        let w = wakeMinutes(n.segs, from: n.spellStart, to: n.spellEnd)
+        // Oracle value, shared with the Kotlin twin: the whole 10 min arousal reads wake. Without the
+        // `motionObserved` requirement the same night scores 0.5 min of wake here.
+        XCTAssertEqual(w, 10.0, accuracy: 0.01, "an unmeasured 10 min arousal must read wake (got \(w) min)")
+    }
+
+    /// With gravity proving the wrist is still the clamp still holds, so an observed-still spell is not wake.
+    func testHeartRateSpellWithObservedStillnessIsStillHeld_V2() {
+        let n = nightWithHeartRateSpell(gravityInSpell: true)
+        let w = wakeMinutes(n.segs, from: n.spellStart, to: n.spellEnd)
+        // Oracle value, shared with the Kotlin twin.
+        XCTAssertEqual(w, 0.5, accuracy: 0.01, "an observed-still arousal must stay held (got \(w) min of wake)")
+    }
+
     // MARK: - detection level: confirmSleepWithHR motion corroboration
 
     /// A supplement night whose whole in-bed run is motionless but HR-elevated (median ~58 vs baseline 48,

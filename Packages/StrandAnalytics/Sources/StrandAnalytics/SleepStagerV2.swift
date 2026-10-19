@@ -193,8 +193,15 @@ public enum SleepStagerV2 {
     /// so a genuinely still low-HR sleep epoch is byte-identical; only a still epoch whose ELEVATED HR was about
     /// to push it awake is held. Motion (`zmvv`) and the jerk gate — which by construction cannot fire on a
     /// quiescent epoch (`jerkMax ≤ floor × gateMult`) — still drive wake on any epoch that actually moved.
+    /// "Quiescent" is a claim that motion was MEASURED and found still, so it requires `motionObserved`.
+    /// An epoch with no gravity samples has `moveFrac == 0` and `jerkMax == 0` only because nothing was
+    /// recorded; reading that as stillness let the clamp below discard a raised heart rate on exactly the
+    /// epochs where motion could not be checked. A WHOOP 4.0 banks gravity in short bursts: in one captured
+    /// night 31 % of the 30 s epochs carried any, and a five-minute spell at a median 122 bpm inside it was
+    /// staged REM. Unmeasured epochs now keep their cardiac wake evidence; only an epoch whose stillness was
+    /// observed has it discarded.
     static func motionQuiescent(_ f: Epoch) -> Bool {
-        f.moveFrac <= 0.0 && f.jerkMax <= f.jerkScale * jerkFloorGateMult
+        f.motionObserved && f.moveFrac <= 0.0 && f.jerkMax <= f.jerkScale * jerkFloorGateMult
     }
 
     /// Weight of the RSA respiration-regularity term (regular → deep, irregular → REM).
@@ -248,6 +255,11 @@ public enum SleepStagerV2 {
         /// guard reads it — the deep term and the REM ramp stay fractions of the session, which is what they
         /// are (see `cyclePrior`).
         let minutesSinceOnset: Double
+        /// True when this epoch holds at least two gravity samples, i.e. at least one per-second jerk was
+        /// actually measured. False means `moveFrac` and `jerkMax` are zero for want of data, not because
+        /// the wrist was still. Defaulted so a caller that builds an epoch from a full gravity series
+        /// (the predicate tests) keeps its meaning. Kotlin twin: `Epoch.motionObserved`.
+        var motionObserved: Bool = true
     }
 
     // MARK: - Feature extraction
@@ -392,7 +404,8 @@ public enum SleepStagerV2 {
             feats.append(Epoch(
                 start: r.start, hr: r.hr, hrVar: r.hrVar, hrFlat11: r.hrFlat11,
                 moveFrac: Double(moves) / Double(r.gapSec), jerkMax: r.jerkMax, respReg: r.respReg,
-                clock: r.clock, jerkScale: jerkScale, minutesSinceOnset: r.minutes))
+                clock: r.clock, jerkScale: jerkScale, minutesSinceOnset: r.minutes,
+                motionObserved: !r.jerks.isEmpty))
         }
         return feats
     }
