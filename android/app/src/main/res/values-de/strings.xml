@@ -2874,4 +2874,6 @@
     <string name="raw_diag_ecg_probe_running">Auf diesem Strap läuft möglicherweise noch eine Aufzeichnung. Das Ergebnis steht im Strap-Log.</string>
     <string name="today_customize_live_session_availability">Erscheint heute, wenn Live Sessions in den Einstellungen aktiviert sind oder eine Session aktiv ist.</string>
     <string name="l10n_app_changelog_today_your_way_heart_rate_any_5e1308b3">Today nach Ihren Wünschen, Herzfrequenz für jede App und Italienisch</string>
+    <string name="l10n_sleep_screen_on_device_1b4ae650">Auf dem Gerät</string>
+    <string name="l10n_sleep_screen_brief_in_bed_awakenings_are_c8f0a7e8">Kurze Wachphasen im Bett werden von allen Wearables am Handgelenk häufig übersehen — der Stager von NOOP erkennt 30,8 %% der Wach-Epochen im Vergleich zur Polysomnographie (Abweichung −4,92 pp, PhysioNet sleep-accel, 31 Probanden / 26.773 Epochen). Dem WHOOP 4.0 fehlt das Band-Signal sleep_state, daher nutzt die Staging-Berechnung ausschließlich Herz-Kreislauf- und Atemdaten; die Messuntergrenze liegt höher. Eine Nacht mit 0 Störungen ist die erwartete Untergrenze, keine zertifizierte ungestörte Nacht. Die Zahlen werden unverändert angezeigt.</string>
 </resources>

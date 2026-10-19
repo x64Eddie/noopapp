@@ -2877,4 +2877,6 @@
     <string name="raw_diag_ecg_probe_running">Na tym pasku może nadal trwać zapis. Werdykt trafia do strap log.</string>
     <string name="today_customize_live_session_availability">Pojawia się dzisiaj, gdy sesje na żywo są włączone w Ustawieniach lub trwa sesja.</string>
     <string name="l10n_app_changelog_today_your_way_heart_rate_any_5e1308b3">Dziś po swojemu, tętno dostępne dla każdej aplikacji i język włoski</string>
+    <string name="l10n_sleep_screen_on_device_1b4ae650">Na urządzeniu</string>
+    <string name="l10n_sleep_screen_brief_in_bed_awakenings_are_c8f0a7e8">Krótkie przebudzenia w łóżku są często pomijane przez wszystkie urządzenia noszone na nadgarstku — stager NOOP wykrywa 30,8%% epok czuwania w porównaniu z polisomnografią (obciążenie −4,92 pp, PhysioNet sleep-accel, 31 osób / 26 773 epok). WHOOP 4.0 nie ma sygnału sleep_state z opaski, więc klasyfikacja opiera się wyłącznie na danych sercowo-oddechowych; próg pomiaru jest wyższy. Noc z 0 zakłóceń to oczekiwany próg, a nie poświadczona noc bez zakłóceń. Wartości są podawane bez zmian.</string>
 </resources>

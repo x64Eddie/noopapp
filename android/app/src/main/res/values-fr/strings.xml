@@ -2860,4 +2860,6 @@
     <string name="raw_diag_ecg_probe_running">Une capture est peut-être encore active sur ce bracelet. Le verdict est écrit dans le strap log.</string>
     <string name="today_customize_live_session_availability">Apparaît aujourd’hui si les sessions en direct sont activées dans Paramètres ou si une session est active.</string>
     <string name="l10n_app_changelog_today_your_way_heart_rate_any_5e1308b3">Aujourd\'hui à votre façon, fréquence cardiaque lisible par toute application, et l\'italien</string>
+    <string name="l10n_sleep_screen_on_device_1b4ae650">Sur l\'appareil</string>
+    <string name="l10n_sleep_screen_brief_in_bed_awakenings_are_c8f0a7e8">Les brefs réveils au lit sont souvent manqués par tous les appareils portés au poignet : le classificateur de NOOP détecte 30,8 %% des époques d\'éveil par rapport à la polysomnographie (biais −4,92 pp, PhysioNet sleep-accel, 31 sujets / 26 773 époques). Le WHOOP 4.0 n\'a pas le signal sleep_state du bracelet ; le classement repose donc uniquement sur les données cardiorespiratoires et le seuil de mesure est plus élevé. Une nuit à 0 perturbation correspond au plancher attendu, et non à une nuit silencieuse certifiée. Les chiffres sont conservés tels quels.</string>
 </resources>

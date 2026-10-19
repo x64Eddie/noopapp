@@ -2831,4 +2831,6 @@
     <string name="raw_diag_ecg_probe_running">此腕带上可能仍在采集。结论会写入 strap log。</string>
     <string name="today_customize_live_session_availability">在设置中启用Live Sessions 实时记录或有正在进行的训练时，今天会显示此部分。</string>
     <string name="l10n_app_changelog_today_your_way_heart_rate_any_5e1308b3">自定义「今天」页面、任何应用都能读取的心率，以及意大利语</string>
+    <string name="l10n_sleep_screen_on_device_1b4ae650">设备端</string>
+    <string name="l10n_sleep_screen_brief_in_bed_awakenings_are_c8f0a7e8">所有腕戴设备都经常漏检卧床时的短暂醒来——NOOP 的分期算法对照多导睡眠图只能检出 30.8%% 的清醒时段（偏差 −4.92 个百分点，PhysioNet sleep-accel，31 名受试者 / 26,773 个时段）。WHOOP 4.0 没有手环的 sleep_state 信号，因此分期仅使用心肺数据，测量下限更高。0 次干扰的夜晚是预期的下限，并非经认证的安静夜晚。数字按原样显示。</string>
 </resources>
