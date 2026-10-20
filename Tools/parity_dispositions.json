@@ -300,6 +300,30 @@
       "platform": "kotlin",
       "rationale": "Swift Repository.refresh reads the same imported daily union (unionDailyMetrics) in the excluded app layer and hands it, still apart from the computed union, to ChargeBaselines.resolve (#2525); this disposition does not assert behavioral parity.",
       "twin_path": "Strand/Data/Repository.swift"
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-file",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/analytics/HistoryRepairRunner.kt",
+      "identity_sha256": "293297b4f8f7cf91ec2265086d107e8f48b49825b353cd904bdf3059cb080155",
+      "platform": "kotlin",
+      "rationale": "The Android analysis loop runs in viewModelScope, so leaving the app cancelled the full-history repair and it restarted from nothing on every launch while holding the scoring lock. This runner gives it a process scope and a single-flight latch. The Swift twin needs neither: AppModel owns the loop for the life of the app, and its repair call is unchanged; stored results are identical on both platforms."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/analytics/HistoryRepairRunner.kt::launchIfPending/4#1",
+      "identity_sha256": "4749094565e5c6e0499de222404530a2aecb6363dcaf3db617141eb34057e597",
+      "platform": "kotlin",
+      "rationale": "The Android analysis loop runs in viewModelScope, so leaving the app cancelled the full-history repair and it restarted from nothing on every launch while holding the scoring lock. This runner gives it a process scope and a single-flight latch. The Swift twin needs neither: AppModel owns the loop for the life of the app, and its repair call is unchanged; stored results are identical on both platforms."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/analytics/HistoryRepairRunner.kt::runClaimed/4#1",
+      "identity_sha256": "41d4591cf85d4db0539f78aa9109ec427ae2cece6a73a5c0d863e48cf752add1",
+      "platform": "kotlin",
+      "rationale": "The Android analysis loop runs in viewModelScope, so leaving the app cancelled the full-history repair and it restarted from nothing on every launch while holding the scoring lock. This runner gives it a process scope and a single-flight latch. The Swift twin needs neither: AppModel owns the loop for the life of the app, and its repair call is unchanged; stored results are identical on both platforms."
     }
   ]
 }

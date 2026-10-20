@@ -14,6 +14,7 @@ import com.noop.analytics.Baselines
 import com.noop.analytics.ChargeBaselines
 import com.noop.analytics.IllnessSignalEngine
 import com.noop.analytics.IllnessWatch
+import com.noop.analytics.HistoryRepairRunner
 import com.noop.analytics.IntelligenceEngine
 import com.noop.analytics.IntelligencePersistence
 import com.noop.analytics.DayCycleIntelligenceIntegration
@@ -1188,32 +1189,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     NoopPrefs.setTsHealPending(appContext, false)
                 }
             }.onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
-            // One-shot shared Effort and sleep-wear repair: recompute strain from source across the FULL
-            // history and replay pre-fix sleep once. Either pending flag triggers one pass; both flags
-            // are set only after persistence returns. Cached-only days are preserved, changing Effort's
-            // old broad-window write behavior. Cancellation/failure retries next launch.
-            runCatching {
-                IntelligenceEngine.runEffortRescoreIfNeeded(
-                    repo = repository,
-                    profile = currentProfile(),
-                    importedDeviceId = deviceId,
-                    maxHROverride = profileStore.hrMaxOverride.takeIf { it > 0 }?.toDouble(),
-                    flagGet = {
-                        !IntelligencePersistence.historyRepairIsPending(
-                            effortDone = NoopPrefs.effortRescoreDone(appContext),
-                            sleepWearDone = NoopPrefs.sleepWearRescoreDone(appContext),
-                        )
-                    },
-                    flagSet = {
-                        NoopPrefs.setEffortRescoreDone(appContext)
-                        NoopPrefs.setSleepWearRescoreDone(appContext)
-                    },
-                    // #1567: this rewrites the FULL history once, so a missing owner source would bake the
-                    // WHOOP5 skin-temp scale into every day of it.
-                    ownerSource = RegistryDayOwnerSource(noopApp.deviceRegistry),
-                    preserveUnscoredHistory = true,
-                )
-            }.onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
+            // The one-shot full-history repair runs AFTER this loop's first tick, not before it: see
+            // launchHistoryRepairIfPending.
+            var historyRepairLaunched = false
             while (isActive) {
                 // #547 RE-POLLUTION: a sync since the last tick may have flagged a re-heal (its ingest gate
                 // dropped bad-clock records). Re-run the purge BEFORE this tick's rescore so the affected days
@@ -1387,6 +1365,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     runCatching { HealthConnectWriter.write(appContext, repository, deviceId) }
                     refreshHcWritebackStatus()   // #660: reflect the outcome the writer just persisted
                 }
+                if (!historyRepairLaunched) {
+                    historyRepairLaunched = true
+                    launchHistoryRepairIfPending()
+                }
                 // 15-min backstop cadence, but wake EARLY on an app-resume kick (#386 self-heal) so a
                 // night the overnight tick was killed before scoring catches up the moment the user opens
                 // NOOP. The next iteration's fingerprint gate makes an unnecessary wake a cheap no-op.
@@ -1519,6 +1501,59 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // with a 4.0 and a 5/MG makes them disagree routinely: the 5/MG cannot bond (#1635) so it never
         // becomes the saved device, while every attempt at it re-records WHOOP5_MG.
         ble.reconnectToAddress(saved.first, saved.second)
+    }
+
+    /**
+     * One-shot shared Effort and sleep-wear repair: recompute strain from source across the FULL history and
+     * replay pre-fix sleep once. Either pending flag triggers one pass; both flags are set only after
+     * persistence returns. Cached-only days are preserved, changing Effort's old broad-window write behavior.
+     *
+     * Called after the loop's first tick so recent nights are scored before this takes the scoring lock, and
+     * handed to [HistoryRepairRunner] so leaving the app does not cancel it (see there). Its inputs are read
+     * here rather than inside the pass, so the process-scoped run does not hold this ViewModel.
+     *
+     * When it finishes, the raw-analysis watermark is cleared and the loop kicked: under the old order the
+     * 15-minute pass ran AFTER the repair and had the last word on the recent window, and this keeps that.
+     */
+    private fun launchHistoryRepairIfPending() {
+        val context = appContext
+        val repo = repository
+        val importedDeviceId = deviceId
+        val profile = currentProfile()
+        val maxHROverride = profileStore.hrMaxOverride.takeIf { it > 0 }?.toDouble()
+        // #1567: this rewrites the FULL history once, so a missing owner source would bake the WHOOP5
+        // skin-temp scale into every day of it.
+        val ownerSource = RegistryDayOwnerSource(noopApp.deviceRegistry)
+        val bleClient = ble
+        val kick = analyzeKick
+        val isPending = {
+            IntelligencePersistence.historyRepairIsPending(
+                effortDone = NoopPrefs.effortRescoreDone(context),
+                sleepWearDone = NoopPrefs.sleepWearRescoreDone(context),
+            )
+        }
+        HistoryRepairRunner.launchIfPending(
+            isPending = isPending,
+            log = { line -> bleClient.externalLog(line) },
+            onDone = {
+                NoopPrefs.setAnalyzeWatermark(context, "")
+                kick.trySend(Unit)
+            },
+        ) {
+            IntelligenceEngine.runEffortRescoreIfNeeded(
+                repo = repo,
+                profile = profile,
+                importedDeviceId = importedDeviceId,
+                maxHROverride = maxHROverride,
+                flagGet = { !isPending() },
+                flagSet = {
+                    NoopPrefs.setEffortRescoreDone(context)
+                    NoopPrefs.setSleepWearRescoreDone(context)
+                },
+                ownerSource = ownerSource,
+                preserveUnscoredHistory = true,
+            )
+        }
     }
 
     /** Snapshot the user's body profile from SharedPreferences as an analytics [UserProfile]. */
