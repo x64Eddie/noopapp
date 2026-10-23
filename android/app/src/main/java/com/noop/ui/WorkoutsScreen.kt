@@ -159,7 +159,7 @@ import kotlin.math.roundToInt
  * an empty window auto-widens to the next larger range, exactly like the macOS screen.
  */
 @Composable
-fun WorkoutsScreen(vm: AppViewModel) {
+fun WorkoutsScreen(vm: AppViewModel, onOpenLiftLog: () -> Unit = {}) {
     // The ViewModel owns the loaded rows now (ALL sources incl. detected, dismissed-filtered) so a
     // mutation (add / edit / relabel / dismiss / delete) republishes the list and the screen updates.
     val allRows by vm.workouts.collectAsState()
@@ -278,6 +278,7 @@ fun WorkoutsScreen(vm: AppViewModel) {
         item {
         WorkoutStartSection(vm, onAdd = { dialog = DialogTarget(null) })
         }
+        item { com.noop.ui.fork.lift.LiftLogEntry(onOpenLiftLog) } // Fork-only: Lift Log entry.
 
         if (allRows.isEmpty()) {
             item {

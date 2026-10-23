@@ -193,6 +193,7 @@ internal enum class Destination(
     Settings("settings", R.string.nav_settings, Icons.Filled.Settings),
     // Experimental and intentionally absent from More: reachable only through Settings > Advanced.
     SelfHostedPush("self_hosted_push", R.string.nav_self_hosted_push, Icons.Filled.CloudSync),
+    LiftLog("lift_log", R.string.fork_lift_title, Icons.Filled.FitnessCenter), // Fork-only: reached from Workouts.
     // Nested Settings destination shared by the Settings row and a blank WHOOP 4.0 Steps tile (#1515).
     // Deliberately absent from [drawerGroups]: it is contextual, not another top-level More item.
     StepsCalibration(
@@ -716,7 +717,7 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                 composable(Destination.Explore.route) { TrendsExploreScreen(viewModel) }
                 composable(Destination.Automations.route) { AutomationsScreen(viewModel) }
                 composable(Destination.SmartAlarm.route) { SmartAlarmScreen(viewModel) }
-                composable(Destination.Workouts.route) { WorkoutsScreen(viewModel) }
+                composable(Destination.Workouts.route) { WorkoutsScreen(viewModel, onOpenLiftLog = { nav.navigate(Destination.LiftLog.route) }) }
                 composable(Destination.Intelligence.route) { IntelligenceScreen(viewModel) }
 
                 // --- Placeholder routes (later waves fill these in) ---
@@ -794,6 +795,7 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                     )
                 }
                 composable(Destination.SelfHostedPush.route) { SelfHostedPushScreen() }
+                composable(Destination.LiftLog.route) { com.noop.ui.fork.lift.LiftLogScreen(viewModel, onBack = { nav.popBackStack() }) }
                 composable(Destination.TestCentre.route) {
                     TestCentreScreen(viewModel, onOpenGroundTruthCollector = {
                         nav.navigate(Destination.GroundTruthCollector.route)
