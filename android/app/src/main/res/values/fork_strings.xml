@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork-only strings (personal build). English only; other locales fall back to these. -->
+<resources>
+    <string name="fork_look_graphite">Graphite look</string>
+    <string name="fork_look_on">On</string>
+    <string name="fork_look_off">Off</string>
+    <string name="fork_look_relaunch">Colours change now; the Inter typeface applies the next time NOOP starts.</string>
+</resources>

@@ -1583,6 +1583,7 @@ fun SettingsScreen(
                     },
                 )
             }
+            com.noop.ui.fork.ForkLook.SettingsRow()
             SettingsRowDivider()   // #79 parity: the hairline every other section has between FormRows (Android rows
                            // were already 16dp-spaced, unlike iOS where they touched — this matches both)
             SettingsFormRow(label = uiString(R.string.l10n_settings_screen_chart_colours_525f4a37)) {
