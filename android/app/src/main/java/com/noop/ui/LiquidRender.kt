@@ -42,7 +42,7 @@ object LiquidRender {
 
     // Structural near-blacks (ported as-is from the Swift renderer's literal rgba wells).
     private val wellInk = Color(red = 10f / 255f, green = 11f / 255f, blue = 16f / 255f, alpha = 0.55f)
-    private val tubeTrack = Color(red = 14f / 255f, green = 14f / 255f, blue = 18f / 255f, alpha = 1f)
+    private val tubeTrack get() = com.noop.ui.fork.ForkLook.tubeTrack ?: Color(red = 14f / 255f, green = 14f / 255f, blue = 18f / 255f, alpha = 1f)
 
     // Colour helpers on `tint` (mirror LiquidCore.swift's liquidDarker / liquidMix). These operate
     // on the passed-in tint colour, not on any physics — kept here so the renderer is self-contained.

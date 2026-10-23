@@ -142,6 +142,7 @@ class MainActivity : ComponentActivity() {
         AppearancePrefs.load(this)
         ChartStylePrefs.load(this)
         AccentPrefs.load(this)   // chrome accent colour (mint / WHOOP blue / custom), live snapshot state
+        com.noop.ui.fork.ForkLook.load(this)
         // Decode the optional on-device profile photo (if set) before first composition so the Today
         // header + Settings avatars show it from the first frame. No-op when no photo is set.
         ProfileAvatarStore.load(this)

@@ -47,7 +47,7 @@ object Palette {
     // composables AND Canvas DrawScopes) with no call-site changes. Set by NoopTheme.
     internal var active by mutableStateOf(DarkTokens)
     /** True when the light scheme is active (surface code uses this for the per-scheme idiom). */
-    val isLight: Boolean get() = active === LightTokens
+    val isLight: Boolean get() = active === LightTokens || active === com.noop.ui.fork.ForkLook.light
 
     // Chart style — when CLASSIC, the DATA accessors below return the throwback red→green ramps
     // (light/dark tuned). Reads ChartStylePrefs.style (snapshot state) so a flip re-colours live.
@@ -467,7 +467,7 @@ object Metrics {
 object NoopType {
     // Helvetica Neue family — falls back to the platform grotesque (SansSerif) when
     // no res/font/helvetica_neue asset is bundled, per the v3 type spec.
-    private val sans = FontFamily.SansSerif
+    private val sans = com.noop.ui.fork.ForkLook.sansFamily
     private val monoFamily = FontFamily.Monospace
 
     /** Display 64–80 / Bold — the recovery ring number. Tight tracking (≈ -0.04em),
@@ -582,7 +582,7 @@ fun NoopTheme(content: @Composable () -> Unit) {
         AppearanceMode.DARK -> true
         AppearanceMode.SYSTEM -> isSystemInDarkTheme()
     }
-    val tokens = if (dark) DarkTokens else LightTokens
+    val tokens = com.noop.ui.fork.ForkLook.tokens(dark)
     if (Palette.active !== tokens) Palette.active = tokens
 
     // Status-/nav-bar icon appearance: light icons on the dark theme, dark icons on the warm-paper

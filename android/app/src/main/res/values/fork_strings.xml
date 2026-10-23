@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fork-only strings (personal build). English only; other locales fall back to these. -->
+<resources>
+    <string name="fork_look_name">Slate look</string>
+    <string name="fork_look_on">On</string>
+    <string name="fork_look_off">Off</string>
+    <string name="fork_look_relaunch">Colours change now, and the day-cycle background turns off with softer gauge numbers. The Inter typeface applies the next time NOOP starts.</string>
+</resources>
