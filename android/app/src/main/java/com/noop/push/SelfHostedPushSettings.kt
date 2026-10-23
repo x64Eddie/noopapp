@@ -147,7 +147,7 @@ class SelfHostedPushSettings private constructor(
     fun recordRunning() = updateWhileEnabled { it.putString(KEY_RUN_STATE, RunState.RUNNING.name) }
 
     fun recordCurrentStream(stream: String) = updateWhileEnabled {
-        require(stream in PushCapabilities.ALL.wireNames) { "unknown push stream" }
+        require(stream in PushCapabilities.ALL_KNOWN_WIRE_NAMES) { "unknown push stream" }
         if (prefs.getString(KEY_CURRENT_STREAM, null) == stream) return@updateWhileEnabled it
         it.putString(KEY_CURRENT_STREAM, stream)
     }
@@ -203,7 +203,7 @@ class SelfHostedPushSettings private constructor(
         val encoded = prefs.getString(KEY_CAPABILITIES_STREAMS, "").orEmpty()
         if (encoded.isEmpty()) return emptyList()
         val names = encoded.split(',')
-        val known = PushCapabilities.ALL.wireNames.toSet()
+        val known = PushCapabilities.ALL_KNOWN_WIRE_NAMES
         return names.takeIf { it.size == it.distinct().size && it.all(known::contains) }
     }
 

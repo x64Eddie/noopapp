@@ -220,7 +220,7 @@ fun SelfHostedPushScreen() {
                         stringResource(
                             R.string.push_capabilities_summary,
                             streams.size,
-                            PushCapabilities.ALL.wireNames.size,
+                            PushCapabilities.ALL_KNOWN_WIRE_NAMES.size,
                         ),
                         style = NoopType.body,
                         color = if (streams.isEmpty()) Palette.statusWarning else Palette.textPrimary,

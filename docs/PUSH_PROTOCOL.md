@@ -309,6 +309,23 @@ Newer tables such as `ppgHrSample`, `stepSample`, `sleepStateSample`, `metricSer
 IMU tables, and any future schema additions are not silently exported by v1. Adding a stream or an
 optional `data` member requires a documented registry update and protocol minor version.
 
+### Version 1.1 additions (strength log)
+
+Android offers `NOOP-Push-Accept-Version: 1.1, 1.0`. A receiver that selects `1.0` sees exactly the
+1.0 registry above, and every batch is labelled `1.0`. A receiver that selects `1.1` may also
+advertise two replace-window streams for the in-app strength log, and every batch in that run is
+labelled `1.1`. A `1.0` capability document that names either stream is invalid, like any unknown name.
+
+| `stream` | Key | Window selector | `data` members |
+|---|---|---|---|
+| `liftSession` | `id` | `startTs` | `startTs`, `endTs` (nullable), `sport`, `programId` (nullable), `programName` (nullable), `sessionRpe` (nullable), `note` (nullable) |
+| `liftSet` | `id` | `sessionStartTs` | `sessionId`, `ord`, `exercise`, `primaryMuscle` (nullable), `secondaryMuscles` (nullable), `setIndex`, `weightKg` (nullable), `reps` (nullable), `rpe` (nullable), `isWarmup`, `startTs` (nullable), `endTs` (nullable), `restSec` (nullable), `note` (nullable), `sessionStartTs` |
+
+`id` is the row's own text identifier. `sessionStartTs` is not a `liftSet` column: it is the parent
+session's `startTs`, joined on read, because a set's own `startTs` is nullable and a window selector
+must not be. A set whose session no longer exists belongs to no window and is not sent. Column
+meanings and units follow `android/app/src/main/java/com/noop/data/LiftEntities.kt`.
+
 ## Acceptance, errors, and retry idempotency
 
 After atomically accepting an append batch or durably accepting a replace-window part, the receiver returns
