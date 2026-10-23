@@ -1189,9 +1189,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     NoopPrefs.setTsHealPending(appContext, false)
                 }
             }.onFailure { if (it is kotlin.coroutines.cancellation.CancellationException) throw it }
-            // The one-shot full-history repair runs AFTER this loop's first tick, not before it: see
+            // The one-shot full-history repair is asked for AFTER each tick, never before the first: see
             // launchHistoryRepairIfPending.
-            var historyRepairLaunched = false
             while (isActive) {
                 // #547 RE-POLLUTION: a sync since the last tick may have flagged a re-heal (its ingest gate
                 // dropped bad-clock records). Re-run the purge BEFORE this tick's rescore so the affected days
@@ -1365,10 +1364,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     runCatching { HealthConnectWriter.write(appContext, repository, deviceId) }
                     refreshHcWritebackStatus()   // #660: reflect the outcome the writer just persisted
                 }
-                if (!historyRepairLaunched) {
-                    historyRepairLaunched = true
-                    launchHistoryRepairIfPending()
-                }
+                launchHistoryRepairIfPending()
                 // 15-min backstop cadence, but wake EARLY on an app-resume kick (#386 self-heal) so a
                 // night the overnight tick was killed before scoring catches up the moment the user opens
                 // NOOP. The next iteration's fingerprint gate makes an unnecessary wake a cheap no-op.
@@ -1508,9 +1504,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * replay pre-fix sleep once. Either pending flag triggers one pass; both flags are set only after
      * persistence returns. Cached-only days are preserved, changing Effort's old broad-window write behavior.
      *
-     * Called after the loop's first tick so recent nights are scored before this takes the scoring lock, and
-     * handed to [HistoryRepairRunner] so leaving the app does not cancel it (see there). Its inputs are read
-     * here rather than inside the pass, so the process-scoped run does not hold this ViewModel.
+     * Called after every loop tick so recent nights are scored before this takes the scoring lock, and
+     * handed to [HistoryRepairRunner], which starts it only while the phone is on power and keeps leaving the
+     * app from cancelling it (see there). Once done, or while a run is in flight, the call is two flag reads.
+     * Its inputs are read here rather than inside the pass, so the process-scoped run does not hold this
+     * ViewModel.
      *
      * When it finishes, the raw-analysis watermark is cleared and the loop kicked: under the old order the
      * 15-minute pass ran AFTER the repair and had the last word on the recent window, and this keeps that.
@@ -1539,6 +1537,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 NoopPrefs.setAnalyzeWatermark(context, "")
                 kick.trySend(Unit)
             },
+            onPower = { PhonePower.isOnExternalPower(context) },
         ) {
             IntelligenceEngine.runEffortRescoreIfNeeded(
                 repo = repo,
