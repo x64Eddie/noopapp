@@ -32,9 +32,10 @@ import com.noop.ui.SettingsRowDivider
  * light pill buttons, and the Inter typeface. A cool white light variant uses the same muted data colours,
  * deepened for contrast on white. Default off.
  *
- * Kept out of upstream's files so a rebase stays cheap. Upstream code reaches this in five one-line hooks:
- * the token pick in `NoopTheme`, `Palette.isLight`, `NoopType`'s sans family, [load] in `MainActivity`, and
- * [SettingsRow] in the Appearance section. Everything else lives here.
+ * Kept out of upstream's files so a rebase stays cheap. Upstream code reaches this in seven one-line hooks:
+ * the token pick in `NoopTheme`, `Palette.isLight`, `NoopType`'s sans family, [load] in `MainActivity`,
+ * [SettingsRow] in the Appearance section, [ringNumeralWeight] in `glowRingCenterTextStyle`, and [tubeTrack] in
+ * `LiquidRender`. Everything else lives here.
  *
  * The palettes are `copy`s of upstream's tokens, so a token upstream adds later is inherited with its upstream
  * value until it is themed here. Only colours change; no score, threshold or stored value does. The "Classic"
@@ -165,6 +166,29 @@ object ForkLook {
 
     /** The house sans for [NoopType]: Inter when the look was on at launch, the platform sans otherwise. */
     val sansFamily: FontFamily get() = if (enabledAtLaunch) inter else FontFamily.SansSerif
+
+    /**
+     * The unfilled track of the liquid bars (Key Metrics tiles, workout bars), or null to keep upstream's. Upstream
+     * paints it an opaque near-black ported from the Swift renderer, whatever the theme; on slate it read as a hole
+     * in the card, so this look recesses it a step below the card instead.
+     */
+    val tubeTrack: Color?
+        get() = when {
+            !enabled -> null
+            Palette.isLight -> Color(0xFFE1E5EC)
+            else -> Color(0xFF272E3C)
+        }
+
+    /**
+     * The ring gauges' centre-number weight. Upstream hardcodes Bold there, so its "Gauge numbers: Softer" setting
+     * reached only the liquid vessels. Softer now reaches the rings too: Regular under this look, after the
+     * reference's light numerals, and SemiBold otherwise, the weight the vessels use for Softer.
+     */
+    fun ringNumeralWeight(): FontWeight = when {
+        AppearancePrefs.gaugeNumerals != GaugeNumeralStyle.SOFT -> FontWeight.Bold
+        enabled -> FontWeight.Normal
+        else -> FontWeight.SemiBold
+    }
 
     /** The Appearance row: a divider and an Off / On control, with a note when the typeface awaits a relaunch. */
     @Composable

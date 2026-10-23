@@ -975,7 +975,7 @@ fun BevelGauge(
  * "No Data" read with one consistent size + weight. Mirrors iOS `GlowRing.centerFont(diameter:)`.
  */
 fun glowRingCenterTextStyle(diameter: Dp, color: Color = Palette.textPrimary): TextStyle =
-    TextStyle(fontWeight = FontWeight.Bold, fontSize = (diameter.value * 0.36f).sp, color = color)
+    TextStyle(fontWeight = com.noop.ui.fork.ForkLook.ringNumeralWeight(), fontSize = (diameter.value * 0.36f).sp, color = color)
 
 @Composable
 fun GlowRing(
