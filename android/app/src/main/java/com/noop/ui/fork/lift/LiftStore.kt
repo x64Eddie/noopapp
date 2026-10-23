@@ -257,6 +257,38 @@ class LiftStore(private val sql: LiftSql, private val newId: () -> String = { UU
         return sets(sessionId).filter { it.exercise == exercise }
     }
 
+    /**
+     * Inserts a finished, already-complete session and its sets in one transaction, for imports.
+     * Returns false and writes nothing when a session already holds the natural key
+     * `(deviceId, startTs, sport)`: an import never overwrites a session logged here, and a second
+     * import of the same file is a no-op.
+     */
+    fun importSession(session: LiftSessionRow, sets: List<LiftSetEntity>, now: Long): Boolean = sql.transaction {
+        val taken = sql.query(
+            "SELECT 1 FROM liftSession WHERE id = ? OR (deviceId = ? AND startTs = ? AND sport = ?)",
+            arrayOf(session.id, session.deviceId, session.startTs, session.sport),
+        ) { 1 }.isNotEmpty()
+        if (taken) return@transaction false
+        sql.exec(
+            "INSERT INTO liftSession ($sessionColumns) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            arrayOf(
+                session.id, session.deviceId, session.startTs, session.endTs, session.sport, session.programId,
+                session.programName, session.sessionRpe, session.note,
+            ),
+        )
+        sets.forEach { s ->
+            sql.exec(
+                "INSERT INTO liftSet ($setColumns) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf(
+                    s.id, s.deviceId, s.sessionId, s.ord, s.exercise, s.primaryMuscle, s.secondaryMuscles, s.setIndex,
+                    s.weightKg, s.reps, s.rpe, if (s.isWarmup) 1 else 0, s.startTs, s.endTs, s.restSec, s.note,
+                ),
+            )
+        }
+        sets.map { it.exercise }.distinct().forEach { touchExercise(session.deviceId, it, now) }
+        true
+    }
+
     /** Every set of every finished session, for per-exercise bests. A personal log is small enough. */
     fun allFinishedSets(deviceId: String): List<LiftSetEntity> = sql.query(
         "SELECT ${setColumns.split(", ").joinToString { "t.$it" }} FROM liftSet t JOIN liftSession s ON s.id = t.sessionId " +

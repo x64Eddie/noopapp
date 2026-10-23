@@ -26,22 +26,7 @@ class LiftStoreTest {
 
     @Before
     fun setUp() {
-        conn = DriverManager.getConnection("jdbc:sqlite::memory:")
-        val dir = System.getProperty("room.schemaLocation") ?: error("room.schemaLocation not set")
-        val schema = File(dir, "com.noop.data.WhoopDatabase").listFiles()!!.maxByOrNull { it.name.removeSuffix(".json").toInt() }!!
-        val entities = JSONObject(schema.readText()).getJSONObject("database").getJSONArray("entities")
-        for (i in 0 until entities.length()) {
-            val e = entities.getJSONObject(i)
-            val table = e.getString("tableName")
-            if (!table.startsWith("lift")) continue
-            conn.createStatement().use { it.execute(e.getString("createSql").replace("\${TABLE_NAME}", table)) }
-            val indices = e.optJSONArray("indices") ?: continue
-            for (j in 0 until indices.length()) {
-                conn.createStatement().use {
-                    it.execute(indices.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", table))
-                }
-            }
-        }
+        conn = liftSchemaConnection()
         store = LiftStore(JdbcLiftSql(conn)) { "id-${++ids}" }
     }
 
@@ -136,8 +121,29 @@ class LiftStoreTest {
         conn.createStatement().use { st -> st.executeQuery("SELECT count(*) FROM $table").use { it.next(); it.getInt(1) } }
 }
 
+/** In-memory SQLite holding the five lift tables exactly as Room's exported schema creates them. */
+internal fun liftSchemaConnection(): Connection {
+    val conn = DriverManager.getConnection("jdbc:sqlite::memory:")
+    val dir = System.getProperty("room.schemaLocation") ?: error("room.schemaLocation not set")
+    val schema = File(dir, "com.noop.data.WhoopDatabase").listFiles()!!.maxByOrNull { it.name.removeSuffix(".json").toInt() }!!
+    val entities = JSONObject(schema.readText()).getJSONObject("database").getJSONArray("entities")
+    for (i in 0 until entities.length()) {
+        val e = entities.getJSONObject(i)
+        val table = e.getString("tableName")
+        if (!table.startsWith("lift")) continue
+        conn.createStatement().use { it.execute(e.getString("createSql").replace("\${TABLE_NAME}", table)) }
+        val indices = e.optJSONArray("indices") ?: continue
+        for (j in 0 until indices.length()) {
+            conn.createStatement().use {
+                it.execute(indices.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", table))
+            }
+        }
+    }
+    return conn
+}
+
 /** [LiftSql] over a JDBC connection, for JVM tests only. */
-private class JdbcLiftSql(private val c: Connection) : LiftSql {
+internal class JdbcLiftSql(private val c: Connection) : LiftSql {
     override fun <T> query(sql: String, args: Array<Any?>, map: (LiftRow) -> T): List<T> =
         c.prepareStatement(sql).use { ps ->
             args.forEachIndexed { i, a -> ps.setObject(i + 1, a) }

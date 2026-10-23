@@ -139,6 +139,7 @@ object LiftingImporter {
 
         repo.upsertDevice(deviceId, name = "Lifting log")
         repo.upsertWorkouts(rows)
+        runCatching { com.noop.ui.fork.lift.LiftImport.importDetail(context, bytes) } // Fork-only: keep the sets.
 
         val totalVolume = result.sessions.sumOf { it.volumeLoadKg }
         return ImportSummary(
