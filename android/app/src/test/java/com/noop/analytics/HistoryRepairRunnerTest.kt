@@ -42,7 +42,7 @@ class HistoryRepairRunnerTest {
         var done = 0
         HistoryRepairRunner.runClaimed(log::add, { done++ }, { throw IllegalStateException("boom") }, tick)
         assertEquals(0, done)
-        assertEquals("History repair: failed after 90 s (IllegalStateException); retries next launch", log.last())
+        assertEquals("History repair: failed after 90 s (IllegalStateException); retries in 6 h", log.last())
     }
 
     @Test
@@ -67,28 +67,62 @@ class HistoryRepairRunnerTest {
     }
 
     @Test
-    fun aSecondLaunchIsRefusedWhileOneRunsAndAcceptedAfterItFails() = runBlocking {
+    fun aSecondLaunchIsRefusedWhileOneRunsAndAFailureBacksOff() = runBlocking {
+        // A fake clock of its own: the back-off this sets lies far before real time, so other tests, which use
+        // the system clock, are unaffected by it.
+        var now = 1_000L
+        val clock = { now }
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         val ended = CompletableDeferred<Unit>()
-        assertTrue(HistoryRepairRunner.launchIfPending({ true }, {}, {}) {
+        assertTrue(HistoryRepairRunner.launchIfPending({ true }, {}, {}, nowMs = clock) {
             started.complete(Unit)
             try { release.await(); throw IllegalStateException("first run fails") } finally { ended.complete(Unit) }
         })
         withTimeout(5_000) { started.await() }
         var secondRan = false
         assertFalse("a second full pass must not queue behind the first",
-            HistoryRepairRunner.launchIfPending({ true }, {}, {}) { secondRan = true })
+            HistoryRepairRunner.launchIfPending({ true }, {}, {}, nowMs = clock) { secondRan = true })
         release.complete(Unit)
         withTimeout(5_000) { ended.await() }
         // The latch is released in `finally`, just after the repair body returns; give it a moment.
+        kotlinx.coroutines.delay(200)
+        assertFalse("a failed run must not retry inside the back-off",
+            HistoryRepairRunner.launchIfPending({ true }, {}, {}, nowMs = clock) { secondRan = true })
+        now += HistoryRepairRunner.FAILURE_BACKOFF_MS
         val retried = CompletableDeferred<Unit>()
         withTimeout(5_000) {
-            while (!HistoryRepairRunner.launchIfPending({ true }, {}, {}) { retried.complete(Unit) }) {
+            while (!HistoryRepairRunner.launchIfPending({ true }, {}, {}, nowMs = clock) { retried.complete(Unit) }) {
                 kotlinx.coroutines.delay(10)
             }
             retried.await()
         }
         assertFalse(secondRan)
+    }
+
+    @Test
+    fun waitsForPowerAndLogsTheWaitOnce() = runBlocking {
+        // One launch on power resets the once-only wait line, whatever an earlier test logged. The wait is
+        // checked before the in-flight latch, so this run need not have finished for the lines below.
+        val reset = CompletableDeferred<Unit>()
+        withTimeout(5_000) {
+            while (!HistoryRepairRunner.launchIfPending({ true }, {}, {}) { reset.complete(Unit) }) {
+                kotlinx.coroutines.delay(10)
+            }
+            reset.await()
+        }
+        val log = mutableListOf<String>()
+        var ran = false
+        assertFalse(HistoryRepairRunner.launchIfPending({ true }, log::add, {}, onPower = { false }) { ran = true })
+        assertFalse(HistoryRepairRunner.launchIfPending({ true }, log::add, {}, onPower = { false }) { ran = true })
+        assertFalse(ran)
+        assertEquals(listOf("History repair: pending; waits until the phone is on power"), log)
+    }
+
+    @Test
+    fun nothingPendingIsSilentOffPower() {
+        val log = mutableListOf<String>()
+        assertFalse(HistoryRepairRunner.launchIfPending({ false }, log::add, {}, onPower = { false }) {})
+        assertTrue(log.isEmpty())
     }
 }
