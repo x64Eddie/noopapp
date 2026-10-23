@@ -2,6 +2,7 @@ package com.noop.ui.fork
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,34 +14,44 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import com.noop.R
+import com.noop.ui.AppearancePrefs
 import com.noop.ui.DarkTokens
+import com.noop.ui.GaugeNumeralStyle
 import com.noop.ui.LightTokens
+import com.noop.ui.NoopPrefs
 import com.noop.ui.NoopType
 import com.noop.ui.Palette
 import com.noop.ui.PaletteTokens
 import com.noop.ui.SegmentedPillControl
 import com.noop.ui.SettingsFormRow
 import com.noop.ui.SettingsRowDivider
-import androidx.compose.material3.Text
 
 /**
- * Fork-only "Graphite" look: neutral graphite surfaces in place of the blue-navy canvas, a cool white light
- * theme in place of warm paper, and the Inter typeface. Default off.
+ * Fork-only "Slate" look, after a muted health-dashboard reference: a deep slate canvas with raised slate cards,
+ * desaturated data colours (sage recovery, terracotta strain, dusty-blue sleep), a lavender-grey accent with
+ * light pill buttons, and the Inter typeface. A cool white light variant uses the same muted data colours,
+ * deepened for contrast on white. Default off.
  *
  * Kept out of upstream's files so a rebase stays cheap. Upstream code reaches this in five one-line hooks:
  * the token pick in `NoopTheme`, `Palette.isLight`, `NoopType`'s sans family, [load] in `MainActivity`, and
  * [SettingsRow] in the Appearance section. Everything else lives here.
  *
- * Only chrome changes. The palette is a `copy` of upstream's tokens with surfaces, lines and text replaced, so
- * every data colour (recovery, strain, sleep stages, zones, domain worlds) and the user's accent stay
- * upstream's, and a token upstream adds later is inherited with its upstream value. The palette switches
- * live; the typeface is read once when [NoopType] initialises, so it applies from the next launch.
+ * The palettes are `copy`s of upstream's tokens, so a token upstream adds later is inherited with its upstream
+ * value until it is themed here. Only colours change; no score, threshold or stored value does. The "Classic"
+ * chart style still overrides the data colours when picked. The accent follows these tokens only while the
+ * Accent setting is Mint (its default); WHOOP Blue and Custom keep their own colour.
  *
- * Stored in its own preferences file, so it never enters the `.noopbak` whitelist or upstream's prefs keys.
+ * Turning the look on also switches the day-cycle backdrop off and gauge numerals to Softer, the two upstream
+ * settings the reference depends on (a flat canvas, light-weight numbers). Both stay ordinary settings and are
+ * not reverted when the look is turned off. The Settings screen mirrors them in local state, so their rows
+ * there show the change after Settings is reopened.
+ *
+ * The palette switches live; the typeface is read once when [NoopType] initialises, so it applies from the next
+ * launch. Stored in its own preferences file, so it never enters the `.noopbak` whitelist or upstream's prefs.
  */
 object ForkLook {
     private const val FILE = "noop_fork_prefs"
-    private const val KEY = "look.graphite"
+    private const val KEY = "look.slate"
 
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -65,24 +76,78 @@ object ForkLook {
     fun set(ctx: Context, value: Boolean) {
         enabled = value
         prefs(ctx).edit().putBoolean(KEY, value).apply()
+        if (value) {
+            NoopPrefs.setShowDayCycleBackground(ctx, false)
+            AppearancePrefs.setGaugeNumerals(ctx, GaugeNumeralStyle.SOFT)
+        }
     }
 
+    // Sampled from the reference: canvas #232A38, cards #343B4C, dividers #38404F, recovery #8CA697,
+    // strain #AA7D6E, sleep #61738C, chart line #7A9197, button #C0C4D0, active tab #C4CAE0, labels #7E838A.
     val dark: PaletteTokens = DarkTokens.copy(
-        surfaceBase = Color(0xFF0E0F11), surfaceRaised = Color(0xFF1A1C1F), surfaceOverlay = Color(0xFF16181B),
-        surfaceInset = Color(0xFF131417), hairline = Color(0xFF26292D), hairlineStrong = Color(0xFF34383D),
-        textPrimary = Color(0xFFF5F6F7), textSecondary = Color(0xFFB6BCC4), textTertiary = Color(0xFF858C96),
-        scenicCenter = Color(0xFF16181B), scenicEdge = Color(0xFF0E0F11),
-        cardFillTop = Color(0xFF1A1C1F), cardFillBottom = Color(0xFF15171A),
-        heroFill = Color(0xE6131417), heroBorder = Color(0x14FFFFFF),
+        surfaceBase = Color(0xFF232A38), surfaceRaised = Color(0xFF343B4C), surfaceOverlay = Color(0xFF2C3342),
+        surfaceInset = Color(0xFF2A3140), hairline = Color(0xFF3D4555), hairlineStrong = Color(0xFF4A5263),
+        textPrimary = Color(0xFFEEF0F4), textSecondary = Color(0xFFB9BEC9), textTertiary = Color(0xFF8A909C),
+        glowAmbient = Color(0xFF2E3646),
+        accent = Color(0xFFB8C1DE), accentHover = Color(0xFFD0D6EA), accentMuted = Color(0xFF3A4258),
+        focusRing = Color(0xFFB8C1DE),
+        recovery000 = Color(0xFFB0766A), recovery030 = Color(0xFFB58A6E), recovery055 = Color(0xFFBBA27A),
+        recovery078 = Color(0xFF9FB39C), recovery100 = Color(0xFF8CA697),
+        strain000 = Color(0xFF7D5E57), strain033 = Color(0xFF8F6A5F), strain066 = Color(0xFFA27667),
+        strain100 = Color(0xFFB98A79),
+        sleepAwake = Color(0xFFB7BCC6), sleepLight = Color(0xFF7C8FA8), sleepDeep = Color(0xFF55657D),
+        sleepREM = Color(0xFF9AA9C4),
+        zone1 = Color(0xFF7C8FA8), zone2 = Color(0xFF7A9197), zone3 = Color(0xFFC2A274), zone4 = Color(0xFFB98A79),
+        zone5 = Color(0xFFB5776A),
+        statusPositive = Color(0xFF8CA697), statusWarning = Color(0xFFC2A274), statusCritical = Color(0xFFB5776A),
+        metricCyan = Color(0xFF7A9197), metricPurple = Color(0xFF8C96B8), metricAmber = Color(0xFFC2A274),
+        metricRose = Color(0xFFB5776A),
+        chargeColor = Color(0xFF8CA697), chargeDeep = Color(0xFF6E8579), chargeBright = Color(0xFFA9C0B2),
+        chargeGlow = Color(0xFF8CA697),
+        effortColor = Color(0xFFAA7D6E), effortDeep = Color(0xFF8B655F), effortBright = Color(0xFFC49585),
+        effortGlow = Color(0xFFAA7D6E),
+        restColor = Color(0xFF61738C), restDeep = Color(0xFF4F5E73), restBright = Color(0xFF8296B0),
+        restGlow = Color(0xFF61738C),
+        stressColor = Color(0xFFC2A274), stressDeep = Color(0xFF61738C), stressBright = Color(0xFFB5776A),
+        stressGlow = Color(0xFFC2A274),
+        scenicCenter = Color(0xFF283040), scenicEdge = Color(0xFF232A38), scenicStar = Color(0xFF8A909C),
+        cardFillTop = Color(0xFF363D4E), cardFillBottom = Color(0xFF323949),
+        gold = Color(0xFFC4CAE0), goldLight = Color(0xFFD3D8E6), goldDeep = Color(0xFFA3ABC2),
+        goldDeepText = Color(0xFF232A38), signalYellow = Color(0xFFD9BC82),
+        heroFill = Color(0x0DFFFFFF), heroBorder = Color(0x00000000),
     )
 
     val light: PaletteTokens = LightTokens.copy(
-        surfaceBase = Color(0xFFF3F4F6), surfaceRaised = Color(0xFFFFFFFF), surfaceOverlay = Color(0xFFFFFFFF),
-        surfaceInset = Color(0xFFEBEDF0), hairline = Color(0xFFE1E4E8), hairlineStrong = Color(0xFFCCD1D7),
-        textPrimary = Color(0xFF111418), textSecondary = Color(0xFF4A525C), textTertiary = Color(0xFF6E7681),
-        glowAmbient = Color(0xFFE8ECF2),
+        surfaceBase = Color(0xFFEEF0F4), surfaceRaised = Color(0xFFFFFFFF), surfaceOverlay = Color(0xFFFFFFFF),
+        surfaceInset = Color(0xFFE5E8EE), hairline = Color(0xFFDCE0E7), hairlineStrong = Color(0xFFC8CDD7),
+        textPrimary = Color(0xFF1E2533), textSecondary = Color(0xFF4E5666), textTertiary = Color(0xFF767E8C),
+        glowAmbient = Color(0xFFE3E7F0),
+        accent = Color(0xFF4F5D80), accentHover = Color(0xFF6A789C), accentMuted = Color(0xFFE3E7F0),
+        focusRing = Color(0xFF4F5D80),
+        recovery000 = Color(0xFF9A5A50), recovery030 = Color(0xFFA5705C), recovery055 = Color(0xFFA88B5C),
+        recovery078 = Color(0xFF789684), recovery100 = Color(0xFF5F8270),
+        strain000 = Color(0xFF7E5449), strain033 = Color(0xFF8F6152), strain066 = Color(0xFFA06E5F),
+        strain100 = Color(0xFFB07E6E),
+        sleepAwake = Color(0xFF9AA2AE), sleepLight = Color(0xFF6F84A2), sleepDeep = Color(0xFF45566F),
+        sleepREM = Color(0xFF8A9BC0),
+        zone1 = Color(0xFF6F84A2), zone2 = Color(0xFF5F8590), zone3 = Color(0xFFA88B5C), zone4 = Color(0xFFB07E6E),
+        zone5 = Color(0xFFA86A5E),
+        statusPositive = Color(0xFF5F8270), statusWarning = Color(0xFFA88B5C), statusCritical = Color(0xFFA86A5E),
+        metricCyan = Color(0xFF5F8590), metricPurple = Color(0xFF6F7CA8), metricAmber = Color(0xFFA88B5C),
+        metricRose = Color(0xFFA86A5E),
+        chargeColor = Color(0xFF6E8B7B), chargeDeep = Color(0xFF557063), chargeBright = Color(0xFF8CA697),
+        chargeGlow = Color(0xFF6E8B7B),
+        effortColor = Color(0xFFA06E5F), effortDeep = Color(0xFF7E5449), effortBright = Color(0xFFB98A79),
+        effortGlow = Color(0xFFA06E5F),
+        restColor = Color(0xFF5A6E8A), restDeep = Color(0xFF45566F), restBright = Color(0xFF6F84A2),
+        restGlow = Color(0xFF5A6E8A),
+        stressColor = Color(0xFFA88B5C), stressDeep = Color(0xFF5A6E8A), stressBright = Color(0xFFA86A5E),
+        stressGlow = Color(0xFFA88B5C),
         scenicCenter = Color(0xFFFFFFFF), scenicEdge = Color(0xFFF0F2F5), scenicStar = Color(0xFFD5DAE0),
         cardFillTop = Color(0xFFFFFFFF), cardFillBottom = Color(0xFFFAFBFC),
+        gold = Color(0xFF4F5D80), goldLight = Color(0xFF6A789C), goldDeep = Color(0xFF3C4866),
+        goldDeepText = Color(0xFFFFFFFF), signalYellow = Color(0xFFB8913E),
+        heroBorder = Color(0x14000000),
     )
 
     /** The token set NoopTheme installs: this look's when on, upstream's otherwise. */
@@ -106,7 +171,7 @@ object ForkLook {
     fun SettingsRow() {
         val context = LocalContext.current
         SettingsRowDivider()
-        SettingsFormRow(label = stringResource(R.string.fork_look_graphite)) {
+        SettingsFormRow(label = stringResource(R.string.fork_look_name)) {
             SegmentedPillControl(
                 items = listOf(false, true),
                 selection = enabled,
