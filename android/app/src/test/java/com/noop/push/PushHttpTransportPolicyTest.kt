@@ -90,7 +90,8 @@ class PushHttpTransportPolicyTest {
 
         assertEquals("GET", method)
         assertEquals("Bearer secret", authorization)
-        assertEquals("1.0", acceptedVersions)
+        // Fork: 1.1 (strength streams) preferred, 1.0 still offered so an upstream receiver keeps working.
+        assertEquals("1.1, 1.0", acceptedVersions)
         assertEquals(
             PushCapabilitiesResult.Available(
                 PushCapabilities(

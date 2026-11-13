@@ -109,8 +109,11 @@ class PushDao internal constructor(private val db: WhoopDatabase) : PushSnapshot
             val (predicate, bounds) = when (table) {
                 PushMutableTable.DAILY_METRIC, PushMutableTable.JOURNAL ->
                     "day >= ? AND day <= ?" to arrayOf<Any?>(window.fromDay, window.toDay)
-                PushMutableTable.SLEEP_SESSION, PushMutableTable.WORKOUT ->
+                PushMutableTable.SLEEP_SESSION, PushMutableTable.WORKOUT, PushMutableTable.LIFT_SESSION ->
                     "startTs >= ? AND startTs < ?" to
+                        arrayOf<Any?>(window.startTsInclusive, window.endTsExclusive)
+                PushMutableTable.LIFT_SET ->
+                    "sessionStartTs >= ? AND sessionStartTs < ?" to
                         arrayOf<Any?>(window.startTsInclusive, window.endTsExclusive)
             }
             val sql = "SELECT ${spec.columns.joinToString()} FROM ${spec.sqlName} " +
@@ -202,9 +205,31 @@ class PushDao internal constructor(private val db: WhoopDatabase) : PushSnapshot
         PushMutableTable.SLEEP_SESSION -> SLEEP
         PushMutableTable.WORKOUT -> WORKOUT
         PushMutableTable.JOURNAL -> JOURNAL
+        PushMutableTable.LIFT_SESSION -> LIFT_SESSION
+        PushMutableTable.LIFT_SET -> LIFT_SET
     }
 
     private companion object {
+        // Protocol 1.1 (fork). A set's window selector is its session's start, so sets are read
+        // through a join; an orphan set (no session) belongs to no window and is never sent.
+        val LIFT_SESSION = TableSpec(
+            "liftSession",
+            listOf("id"),
+            listOf("startTs", "endTs", "sport", "programId", "programName", "sessionRpe", "note"),
+        )
+        val LIFT_SET = TableSpec(
+            "(SELECT s.id, s.deviceId, s.sessionId, s.ord, s.exercise, s.primaryMuscle, s.secondaryMuscles, " +
+                "s.setIndex, s.weightKg, s.reps, s.rpe, s.isWarmup, s.startTs, s.endTs, s.restSec, s.note, " +
+                "ls.startTs AS sessionStartTs FROM liftSet s JOIN liftSession ls " +
+                "ON ls.id = s.sessionId AND ls.deviceId = s.deviceId) AS liftSetWindow",
+            listOf("id"),
+            listOf(
+                "sessionId", "ord", "exercise", "primaryMuscle", "secondaryMuscles", "setIndex", "weightKg",
+                "reps", "rpe", "isWarmup", "startTs", "endTs", "restSec", "note", "sessionStartTs",
+            ),
+            booleanColumns = setOf("isWarmup"),
+        )
+
         val HR = TableSpec("hrSample", listOf("ts"), listOf("bpm"))
         val RR = TableSpec(
             "rrInterval",

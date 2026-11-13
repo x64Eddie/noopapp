@@ -230,6 +230,7 @@ class SelfHostedPushWorker(
             today = { LocalDate.now() },
             zoneId = ZoneId.systemDefault(),
             destinationStillCurrent = { settings.enabledEndpoint() == endpoint },
+            protocolVersion = capabilities.protocolVersion,
         ).pushKnownDevices(startDeviceIndex, MAX_DEVICES_PER_RUN, capabilities)
         settings.recordAcceptedBatches(
             run.acceptedBatches,

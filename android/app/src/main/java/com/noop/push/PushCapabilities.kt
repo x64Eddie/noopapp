@@ -18,7 +18,22 @@ data class PushCapabilities(
     companion object {
         /** Test/local default. Network capability documents must always provide a real receiver state id. */
         const val UNSCOPED_RECEIVER_STATE_ID = "00000000-0000-4000-8000-000000000000"
-        val ALL = PushCapabilities(PushAppendTable.entries.toSet(), PushMutableTable.entries.toSet())
+        /** The protocol 1.0 registry: every upstream stream and none of the 1.1 additions. */
+        val ALL = forVersion(PushProtocol.VERSION)
+
+        /** Every stream name any supported version can carry, for validating stored names. */
+        val ALL_KNOWN_WIRE_NAMES: Set<String> =
+            (PushAppendTable.entries.map { it.wireName } + PushMutableTable.entries.map { it.wireName }).toSet()
+
+        fun forVersion(
+            version: String,
+            receiverStateId: String = UNSCOPED_RECEIVER_STATE_ID,
+        ): PushCapabilities = PushCapabilities(
+            PushAppendTable.entries.toSet(),
+            PushMutableTable.entries.filter { it.availableIn(version) }.toSet(),
+            version,
+            receiverStateId,
+        )
 
         fun parse(bytes: ByteArray): PushCapabilities {
             if (bytes.size > PushProtocol.MAX_ACK_BYTES) {
@@ -37,7 +52,8 @@ data class PushCapabilities(
             if (actualMembers.any { it in PushProtocol.FORBIDDEN_REMOTE_CONTROL_MEMBERS }) {
                 throw PushProtocolException("capabilities contain forbidden remote-control metadata")
             }
-            if (obj.opt("type") != "capabilities" || obj.opt("protocolVersion") != PushProtocol.VERSION) {
+            val version = obj.opt("protocolVersion") as? String
+            if (obj.opt("type") != "capabilities" || version == null || version !in PushProtocol.SUPPORTED_VERSIONS) {
                 throw PushProtocolException("unsupported capability document")
             }
             val receiverStateId = (obj.opt("receiverStateId") as? String)?.takeIf(::isCanonicalUuid)
@@ -45,7 +61,8 @@ data class PushCapabilities(
             val array = obj.opt("streams") as? JSONArray
                 ?: throw PushProtocolException("capabilities.streams must be an array")
             val appendByName = PushAppendTable.entries.associateBy { it.wireName }
-            val mutableByName = PushMutableTable.entries.associateBy { it.wireName }
+            // A stream outside the selected version's registry is as unknown as a made-up name.
+            val mutableByName = PushMutableTable.entries.filter { it.availableIn(version) }.associateBy { it.wireName }
             val seen = mutableSetOf<String>()
             val append = linkedSetOf<PushAppendTable>()
             val mutable = linkedSetOf<PushMutableTable>()
@@ -59,7 +76,7 @@ data class PushCapabilities(
                     else -> throw PushProtocolException("unknown capability stream")
                 }
             }
-            return PushCapabilities(append, mutable, PushProtocol.VERSION, receiverStateId)
+            return PushCapabilities(append, mutable, version, receiverStateId)
         }
 
         private fun isCanonicalUuid(value: String): Boolean = runCatching {

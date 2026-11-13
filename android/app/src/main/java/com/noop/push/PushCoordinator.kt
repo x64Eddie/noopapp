@@ -14,6 +14,8 @@ class PushCoordinator(
     private val today: () -> LocalDate,
     private val zoneId: ZoneId,
     private val destinationStillCurrent: () -> Boolean = { true },
+    /** The version the receiver selected; every batch is stamped with it. */
+    private val protocolVersion: String = PushProtocol.VERSION,
 ) {
     suspend fun pushAppend(table: PushAppendTable, deviceId: String): PushResult {
         val stored = try {
@@ -49,7 +51,7 @@ class PushCoordinator(
         }
         if (rows.isEmpty()) return PushResult.NoData
         val batch = try {
-            PushProtocol.appendBatch(table, sourceId, deviceId, effective, rows)
+            PushProtocol.appendBatch(table, sourceId, deviceId, effective, rows, protocolVersion)
         } catch (t: PushProtocolException) {
             return rejected(PushFailure(PushFailureCode.LOCAL_DATA))
         }
@@ -130,7 +132,7 @@ class PushCoordinator(
             .flatMap { recordsByDay.getValue(it).asSequence() }
             .toList()
         val batches = try {
-            PushProtocol.mutableBatches(table, sourceId, deviceId, window, changedRows)
+            PushProtocol.mutableBatches(table, sourceId, deviceId, window, changedRows, protocolVersion)
         } catch (t: PushProtocolException) {
             return rejected(PushFailure(PushFailureCode.LOCAL_DATA))
         }
@@ -165,8 +167,11 @@ class PushCoordinator(
             runCatching { LocalDate.parse(value) }
                 .getOrElse { throw PushProtocolException("mutable day key is invalid") }
         }
-        PushMutableTable.SLEEP_SESSION, PushMutableTable.WORKOUT -> {
-            val value = record.key["startTs"]
+        PushMutableTable.SLEEP_SESSION, PushMutableTable.WORKOUT,
+        PushMutableTable.LIFT_SESSION, PushMutableTable.LIFT_SET -> {
+            // The window selector: a key for sleep/workout, a data member for the id-keyed lift rows.
+            val selector = if (table == PushMutableTable.LIFT_SET) "sessionStartTs" else "startTs"
+            val value = record.key[selector] ?: record.data[selector]
             val timestamp = when (value) {
                 is Byte, is Short, is Int, is Long -> (value as Number).toLong()
                 else -> throw PushProtocolException("mutable startTs key is not an integer")

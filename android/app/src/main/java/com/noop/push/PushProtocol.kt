@@ -9,6 +9,18 @@ class PushProtocolException(message: String) : IllegalArgumentException(message)
 /** Deterministic, bounded NDJSON encoder and acknowledgement codec for protocol 1.0. */
 object PushProtocol {
     const val VERSION = "1.0"
+    /** Fork minor version: adds the liftSession and liftSet replace-window streams. */
+    const val VERSION_1_1 = "1.1"
+    /** Sender-preferred order for NOOP-Push-Accept-Version; a 1.0 receiver keeps the 1.0 registry. */
+    val SUPPORTED_VERSIONS: List<String> = listOf(VERSION_1_1, VERSION)
+    val ACCEPT_VERSIONS: String = SUPPORTED_VERSIONS.joinToString(", ")
+
+    /** Same major, minor at least [minimum]. Versions are exact `MAJOR.MINOR` strings. */
+    fun versionAtLeast(version: String, minimum: String): Boolean {
+        val a = version.split('.').map(String::toInt)
+        val b = minimum.split('.').map(String::toInt)
+        return a[0] == b[0] && a[1] >= b[1]
+    }
     const val MAX_RECORDS = 5_000
     /** Hard limit for the decoded UTF-8 NDJSON entity, before optional content coding. */
     const val MAX_BODY_BYTES = 4 * 1024 * 1024
@@ -29,8 +41,10 @@ object PushProtocol {
         deviceId: String,
         startCursor: PushCursor?,
         records: List<PushAppendRecord>,
+        version: String = VERSION,
     ): PushBatch {
         validateUuid(sourceId, "sourceId")
+        requireSupported(version)
         if (records.isEmpty()) throw PushProtocolException("append batch must contain a record")
         require(records.zipWithNext().all { (a, b) -> a.rowId < b.rowId }) {
             "append records must be strictly ordered by rowid"
@@ -48,7 +62,7 @@ object PushProtocol {
             val end = cursorFor(table, deviceId, candidate)
             val candidateCount = selectedRows.size + 1
             val headerSize = appendHeader(
-                sourceId, table, deviceId, startCursor, end, candidateCount, UUID_PLACEHOLDER,
+                sourceId, table, deviceId, startCursor, end, candidateCount, UUID_PLACEHOLDER, version,
             ).size
             if (headerSize + rowBytes + encodedRow.size > MAX_BODY_BYTES) break
             selectedRows += candidate
@@ -58,13 +72,15 @@ object PushProtocol {
         if (selectedRows.isEmpty()) throw PushProtocolException("first append record exceeds the 4 MiB decoded batch limit")
 
         val endCursor = cursorFor(table, deviceId, selectedRows.last())
-        val identity = appendIdentity(sourceId, table, deviceId, startCursor, endCursor, selectedRows.size)
+        val identity = appendIdentity(sourceId, table, deviceId, startCursor, endCursor, selectedRows.size, version)
         val batchId = stableUuid(identity, selectedLines)
-        val header = appendHeader(sourceId, table, deviceId, startCursor, endCursor, selectedRows.size, batchId)
+        val header = appendHeader(
+            sourceId, table, deviceId, startCursor, endCursor, selectedRows.size, batchId, version,
+        )
         val body = concatenate(header, selectedLines)
         check(body.size <= MAX_BODY_BYTES)
         return PushBatch(
-            protocolVersion = VERSION,
+            protocolVersion = version,
             batchId = batchId,
             sourceId = sourceId,
             table = table,
@@ -85,8 +101,13 @@ object PushProtocol {
         deviceId: String,
         window: PushWindow,
         records: List<PushMutableRecord>,
+        version: String = VERSION,
     ): List<PushBatch> {
         validateUuid(sourceId, "sourceId")
+        requireSupported(version)
+        if (!table.availableIn(version)) {
+            throw PushProtocolException("${table.wireName} is not part of protocol $version")
+        }
         records.forEach { validateRecord(table, it.key, it.data) }
         val duplicate = records.groupingBy { orderedObjectJson(it.key) }.eachCount().any { it.value > 1 }
         if (duplicate) throw PushProtocolException("replace_window contains a duplicate key")
@@ -94,7 +115,7 @@ object PushProtocol {
         val replacementIdentity = mapOf(
             "deviceId" to deviceId,
             "delivery" to "replace_window",
-            "protocolVersion" to VERSION,
+            "protocolVersion" to version,
             "sourceId" to sourceId,
             "stream" to table.wireName,
             "window" to selectorBounds(table, window),
@@ -116,6 +137,7 @@ object PushProtocol {
                 parts = Int.MAX_VALUE,
                 count = nextCount,
                 batchId = UUID_PLACEHOLDER,
+                version = version,
             )
             if (nextCount > MAX_RECORDS || conservativeHeader.size + currentBytes + line.size > MAX_BODY_BYTES) {
                 if (current.isEmpty()) throw PushProtocolException("first replace_window record exceeds the 4 MiB decoded batch limit")
@@ -125,7 +147,7 @@ object PushProtocol {
             }
             val oneHeader = mutableHeader(
                 sourceId, table, deviceId, window, replacementId,
-                Int.MAX_VALUE, Int.MAX_VALUE, 1, UUID_PLACEHOLDER,
+                Int.MAX_VALUE, Int.MAX_VALUE, 1, UUID_PLACEHOLDER, version,
             )
             if (oneHeader.size + line.size > MAX_BODY_BYTES) {
                 throw PushProtocolException("replace_window record exceeds the 4 MiB decoded batch limit")
@@ -139,16 +161,16 @@ object PushProtocol {
         return chunks.mapIndexed { index, partLines ->
             val part = index + 1
             val identity = mutableIdentity(
-                sourceId, table, deviceId, window, replacementId, part, parts, partLines.size,
+                sourceId, table, deviceId, window, replacementId, part, parts, partLines.size, version,
             )
             val batchId = stableUuid(identity, partLines)
             val header = mutableHeader(
-                sourceId, table, deviceId, window, replacementId, part, parts, partLines.size, batchId,
+                sourceId, table, deviceId, window, replacementId, part, parts, partLines.size, batchId, version,
             )
             val body = concatenate(header, partLines)
             check(partLines.size <= MAX_RECORDS && body.size <= MAX_BODY_BYTES)
             PushBatch(
-                protocolVersion = VERSION,
+                protocolVersion = version,
                 batchId = batchId,
                 sourceId = sourceId,
                 table = table,
@@ -172,7 +194,8 @@ object PushProtocol {
         deviceId: String,
         window: PushWindow,
         records: List<PushMutableRecord>,
-    ): PushBatch = mutableBatches(table, sourceId, deviceId, window, records).singleOrNull()
+        version: String = VERSION,
+    ): PushBatch = mutableBatches(table, sourceId, deviceId, window, records, version).singleOrNull()
         ?: throw PushProtocolException("replace_window requires multiple parts")
 
     /** SHA-256(stream LF device LF compact-natural-key), matching cursor invalidation contract. */
@@ -277,11 +300,12 @@ object PushProtocol {
         start: PushCursor?,
         end: PushCursor,
         count: Int,
+        version: String,
     ): Map<String, Any?> = mapOf(
         "delivery" to "append",
         "deviceId" to deviceId,
         "endCursor" to cursorJson(end),
-        "protocolVersion" to VERSION,
+        "protocolVersion" to version,
         "recordCount" to count,
         "sourceId" to sourceId,
         "startCursor" to start?.let(::cursorJson),
@@ -297,7 +321,10 @@ object PushProtocol {
         end: PushCursor,
         count: Int,
         batchId: String,
-    ): ByteArray = encodeLine(appendIdentity(sourceId, table, deviceId, start, end, count) + ("batchId" to batchId))
+        version: String,
+    ): ByteArray = encodeLine(
+        appendIdentity(sourceId, table, deviceId, start, end, count, version) + ("batchId" to batchId),
+    )
 
     private fun mutableIdentity(
         sourceId: String,
@@ -308,11 +335,12 @@ object PushProtocol {
         part: Int,
         parts: Int,
         count: Int,
+        version: String,
     ): Map<String, Any?> = mapOf(
         "delivery" to "replace_window",
         "deviceId" to deviceId,
         "endCursor" to null,
-        "protocolVersion" to VERSION,
+        "protocolVersion" to version,
         "recordCount" to count,
         "sourceId" to sourceId,
         "startCursor" to null,
@@ -335,8 +363,9 @@ object PushProtocol {
         parts: Int,
         count: Int,
         batchId: String,
+        version: String,
     ): ByteArray = encodeLine(
-        mutableIdentity(sourceId, table, deviceId, window, replacementId, part, parts, count) +
+        mutableIdentity(sourceId, table, deviceId, window, replacementId, part, parts, count, version) +
             ("batchId" to batchId),
     )
 
@@ -346,11 +375,21 @@ object PushProtocol {
             "selector" to "day",
             "startInclusive" to window.fromDay,
         )
-        PushMutableTable.SLEEP_SESSION, PushMutableTable.WORKOUT -> mapOf(
+        PushMutableTable.SLEEP_SESSION, PushMutableTable.WORKOUT, PushMutableTable.LIFT_SESSION -> mapOf(
             "endExclusive" to window.endTsExclusive,
             "selector" to "startTs",
             "startInclusive" to window.startTsInclusive,
         )
+        // A set's own startTs is nullable, so its window selector is its session's start, joined on read.
+        PushMutableTable.LIFT_SET -> mapOf(
+            "endExclusive" to window.endTsExclusive,
+            "selector" to "sessionStartTs",
+            "startInclusive" to window.startTsInclusive,
+        )
+    }
+
+    private fun requireSupported(version: String) {
+        if (version !in SUPPORTED_VERSIONS) throw PushProtocolException("unsupported protocol version $version")
     }
 
     private fun cursorFor(table: PushAppendTable, deviceId: String, record: PushAppendRecord) =
@@ -445,6 +484,14 @@ object PushProtocol {
             "distanceM", "zonesJSON", "notes", "routePolyline", "steps",
         )),
         "journal" to (listOf("day", "question") to listOf("answeredYes", "notes", "numericValue")),
+        // Protocol 1.1 (fork): the strength log, keyed by each row's own text id.
+        "liftSession" to (listOf("id") to listOf(
+            "startTs", "endTs", "sport", "programId", "programName", "sessionRpe", "note",
+        )),
+        "liftSet" to (listOf("id") to listOf(
+            "sessionId", "ord", "exercise", "primaryMuscle", "secondaryMuscles", "setIndex", "weightKg",
+            "reps", "rpe", "isWarmup", "startTs", "endTs", "restSec", "note", "sessionStartTs",
+        )),
     )
 }
 

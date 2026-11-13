@@ -19,11 +19,21 @@ enum class PushAppendTable(override val wireName: String) : PushTable {
     GRAVITY_SAMPLE("gravitySample");
 }
 
-enum class PushMutableTable(override val wireName: String) : PushTable {
+enum class PushMutableTable(
+    override val wireName: String,
+    /** First protocol version whose registry carries this stream. */
+    val minVersion: String = PushProtocol.VERSION,
+) : PushTable {
     DAILY_METRIC("dailyMetric"),
     SLEEP_SESSION("sleepSession"),
     WORKOUT("workout"),
-    JOURNAL("journal");
+    JOURNAL("journal"),
+
+    // Fork-only (protocol 1.1): the strength log. Sent only when the receiver selects 1.1.
+    LIFT_SESSION("liftSession", PushProtocol.VERSION_1_1),
+    LIFT_SET("liftSet", PushProtocol.VERSION_1_1);
+
+    fun availableIn(version: String): Boolean = PushProtocol.versionAtLeast(version, minVersion)
 }
 
 /** Key excludes deviceId (which is batch-scoped); data contains only non-key registry columns. */
